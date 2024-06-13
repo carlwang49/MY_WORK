@@ -1,0 +1,8 @@
+/Dataset
+/Result
+*.pdf
+/my_work
+.DS_Store
+__pycache__/
+*.json
+Data/
