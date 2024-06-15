@@ -8,6 +8,7 @@ class EVChargingEnv:
         self.num_agents = num_agents
         self.current_parking = np.zeros(num_agents, dtype=bool)  # Whether the charging pile is connected
         self.current_parking_number = 0  # Number of currently connected charging piles
+        self.previous_parking_number = 0  # Number of previously connected charging piles
         
         # Define charging pile power constraints
         self.max_charging_power = 16  # kW
@@ -66,7 +67,6 @@ class EVChargingEnv:
     def remove_ev(self, agent_idx):
         if self.current_parking[agent_idx]:
             self.current_parking[agent_idx] = False  # Disconnect the selected charging pile
-            
             # Record the charging history
             self.charging_records.loc[len(self.charging_records)] = {
                 'requestID': self.ev_data[agent_idx]['requestID'],
@@ -74,8 +74,8 @@ class EVChargingEnv:
                 'departure_time': self.ev_data[agent_idx]['departure_time'],
                 'initial_soc': self.ev_data[agent_idx]['initial_soc'],
                 'final_soc': self.ev_data[agent_idx]['soc'],
-                'total_charging_capacity': (self.ev_data[agent_idx]['soc'] - self.ev_data[agent_idx]['initial_soc']) * self.C_k, # kWh
-                'total_charging_time': (self.ev_data[agent_idx]['departure_time'] - self.ev_data[agent_idx]['arrival_time']).seconds / 3600 # Convert seconds to hours
+                'charging_power': (self.ev_data[agent_idx]['soc'] - self.ev_data[agent_idx]['initial_soc']) * self.C_k, # kWh
+                'charging_time': (self.ev_data[agent_idx]['departure_time'] - self.ev_data[agent_idx]['arrival_time']).seconds / 3600 # Convert seconds to hours
             }
             
             # Reset EV data for the selected charging pile
@@ -142,16 +142,23 @@ class EVChargingEnv:
     def get_soc_max_and_min(self, agent_idx, current_time: datetime):
         
         SoC_lower_bound, SoC_upper_bound = self.soc_min, self.soc_max # Initialize the lower and upper bounds of SoC
+        previous_parking_number = self.previous_parking_number if self.previous_parking_number > 0 else 1   # Get the number of previously connected charging piles
         
         # Calculate the time needed to reach the departure SoC
         t_needed = self.ev_data[agent_idx]['departure_time'] - \
             timedelta(minutes=int((( self.ev_data[agent_idx]['departure_soc'] - \
-                self.ev_data[agent_idx]['initial_soc']) * self.C_k / (self.max_charging_power / self.current_parking_number)) * 60)) # Calculate the time needed to reach the departure SoC
+                self.soc_min) * self.C_k / (self.max_charging_power / previous_parking_number)) * 60)) # Calculate the time needed to reach the departure SoC
 
         if current_time > t_needed:
             # Calculate the lower bound of SoC based on the time needed to reach the departure SoC
-            SoC_lower_bound = self.soc_min + (self.ev_data[agent_idx]['departure_soc'] - self.soc_min) * ((current_time - t_needed).seconds / (self.ev_data[agent_idx]['departure_time'] - t_needed).seconds)
-  
+            SoC_lower_bound = self.soc_min + \
+                (self.ev_data[agent_idx]['departure_soc'] - self.soc_min) * ((current_time - t_needed).seconds / (self.ev_data[agent_idx]['departure_time'] - t_needed).seconds)
+                
+            # Calculate the charging power based on the time needed to reach the departure SoC
+            charging_power = (SoC_lower_bound - self.soc_min) * self.C_k / (current_time - t_needed).seconds * 3600 
+            if charging_power > self.max_charging_power:
+                SoC_lower_bound = self.soc_min + (self.max_charging_power / previous_parking_number) * (current_time - t_needed).seconds / 3600 / self.C_k 
+                
         elif current_time < self.ev_data[agent_idx]['time_before_soc_min']:
             # Calculate the upper bound of SoC based on the time before the SoC reaches the minimum value
             SoC_lower_bound = \
@@ -214,6 +221,7 @@ if __name__ == '__main__':
 
     while current_time <= end_time:
         
+        count = 0
         # Add EVs that arrived at the current time
         if current_time not in [ev['arrival_time'] for ev in ev_request_data]:
             logger.info(f"Current time: {current_time} | No EVs arrived.")
@@ -222,6 +230,7 @@ if __name__ == '__main__':
                 if ev['arrival_time'] == current_time:
                     env.add_ev(ev['requestID'], ev['arrival_time'], ev['departure_time'], ev['initial_soc'], ev['departure_soc'])
                     env.current_parking_number += 1
+                    count += 1
                     logger.info(f"EV {ev['requestID']} arrived at {current_time}")
 
         # Update the SoC of each connected EV
@@ -243,8 +252,10 @@ if __name__ == '__main__':
                     agent_idx = np.where([ev['requestID'] == data['requestID'] for data in env.ev_data])[0][0]
                     env.remove_ev(agent_idx)
                     env.current_parking_number -= 1
+                    count -= 1
                     logger.info(f"EV {ev['requestID']} departed at {current_time}")
         
+        env.previous_parking_number += count
         current_time += timedelta(hours=time_interval)
 
     # Save the charging records and SoC history to CSV files
