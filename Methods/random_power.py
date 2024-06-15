@@ -5,6 +5,9 @@ from logger_config import configured_logger as logger
 
 
 if __name__ == '__main__':
+    """
+    Run a simulation of the EV charging environment with random EV request data and random charging power selection.
+    """
 
     # Set random seed for reproducibility and create an EV charging environment
     np.random.seed(42)
