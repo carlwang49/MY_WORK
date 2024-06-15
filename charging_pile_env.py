@@ -141,6 +141,9 @@ class EVChargingEnv:
     """Get the maximum and minimum SoC based on the current time."""
     def get_soc_max_and_min(self, agent_idx, current_time: datetime):
         
+        if current_time == self.ev_data[agent_idx]['arrival_time']:
+            return self.ev_data[agent_idx]['initial_soc'], self.ev_data[agent_idx]['initial_soc']
+        
         SoC_lower_bound, SoC_upper_bound = self.soc_min, self.soc_max # Initialize the lower and upper bounds of SoC
         previous_parking_number = self.previous_parking_number if self.previous_parking_number > 0 else 1   # Get the number of previously connected charging piles
         
@@ -192,7 +195,7 @@ if __name__ == '__main__':
 
     # Set random seed for reproducibility and create an EV charging environment
     np.random.seed(42)
-    num_agents = 10
+    num_agents = 20
     env = EVChargingEnv(num_agents)
 
     # Generate random EV request data
