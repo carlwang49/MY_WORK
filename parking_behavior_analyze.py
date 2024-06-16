@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # 讀取 CSV 文件
-csv_path = './Data/parking_behavior.csv' 
+csv_path = './Dataset/parking_behavior.csv' 
 df = pd.read_csv(csv_path)
 
 # 設置繪圖風格

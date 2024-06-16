@@ -35,5 +35,5 @@ data = {
 df = pd.DataFrame(data)
 
 # Save to CSV
-csv_path = './Data/parking_behavior.csv'
+csv_path = './Dataset/parking_behavior.csv'
 df.to_csv(csv_path, index=False)
