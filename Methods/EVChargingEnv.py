@@ -136,7 +136,6 @@ class EVChargingEnv:
     
     """Reset the environment."""
     def reset(self):
-        self.current_step = 0
         self.ev_data = [{'requestID': None, 
                          'arrival_time': None, 
                          'departure_time': None, 
