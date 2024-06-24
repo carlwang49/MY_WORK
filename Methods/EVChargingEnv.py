@@ -4,18 +4,23 @@ from datetime import datetime, timedelta
 from logger_config import configured_logger as logger
 
 class EVChargingEnv:
-    def __init__(self, num_agents):  
+    def __init__(self, num_agents, start_time, end_time):  
         self.num_agents = num_agents
         self.current_parking = np.zeros(num_agents, dtype=bool)  # Whether the charging pile is connected
         self.current_parking_number = 0  # Number of currently connected charging piles
         self.previous_parking_number = 0  # Number of previously connected charging piles
         
+        # Initialize the time range
+        self.start_time = start_time
+        self.end_time = end_time
+        self.timestamp = start_time
+        
         # Define charging pile power constraints
-        self.max_charging_power = 16  # kW
-        self.max_discharging_power = -16  # kW
-        self.C_k = 24  # Battery capacity in kWh
+        self.max_charging_power = 120  # kW
+        self.max_discharging_power = -120  # kW
+        self.C_k = 75  # Battery capacity in kWh
         self.eta = 0.95  # Charging efficiency
-        self.soc_max = 0.9  # Maximum SoC
+        self.soc_max = 0.8  # Maximum SoC
         self.soc_min = 0.2  # Minimum SoC
 
         # Initialize EV data for each charging pile
@@ -25,11 +30,28 @@ class EVChargingEnv:
                          'initial_soc': 0.0, 
                          'soc': 0.0, 
                          'charging_history': [], 
-                         'time_before_soc_max': None} for _ in range(self.num_agents)]
+                         'time_before_soc_max': None,
+                         'time_before_soc_min': None,
+                         'connected': False} 
+                        for _ in range(self.num_agents)]
         
         # Initialize a DataFrame to store charging records and SoC history
-        self.charging_records = pd.DataFrame(columns=['requestID', 'arrival_time', 'departure_time', 'initial_soc', 'final_soc', 'charging_power', 'charging_time']) # Initialize a DataFrame to store charging records
-        self.soc_history = pd.DataFrame(columns=['requestID', 'current_time', 'soc', 'SoC_upper_bound', 'SoC_lower_bound']) # Initialize a DataFrame to store SoC history
+        self.charging_records = pd.DataFrame(columns=['requestID', 
+                                                      'arrival_time', 
+                                                      'departure_time', 
+                                                      'initial_soc', 
+                                                      'departure_soc',
+                                                      'final_soc', 
+                                                      'charging_power', 
+                                                      'charging_time']) 
+        
+        # Initialize a DataFrame to store SoC history
+        self.soc_history = pd.DataFrame(columns=['requestID', 
+                                                 'current_time', 
+                                                 'soc', 
+                                                 'SoC_upper_bound', 
+                                                 'SoC_lower_bound']) 
+        
         
     def add_ev(self, requestID, arrival_time, departure_time, initial_soc, departure_soc):
         available_piles = np.where(self.current_parking == False)[0]  # Find indices of unconnected charging piles
@@ -49,6 +71,7 @@ class EVChargingEnv:
                 'charging_history': [],  # Initialize an empty list to store charging records
                 'time_before_soc_max': arrival_time + timedelta(minutes=((self.soc_max - initial_soc) * self.C_k / self.max_charging_power) * 60), # Calculate the time before the SoC reaches the maximum value
                 'time_before_soc_min': arrival_time + timedelta(minutes=((self.soc_min - initial_soc) * self.C_k / self.max_discharging_power) * 60), # Calculate the time before the SoC reaches the minimum value
+                'connected': True # Indicate that the charging pile is connected
             }
             
             # Log the EV data
@@ -72,6 +95,7 @@ class EVChargingEnv:
                 'requestID': self.ev_data[agent_idx]['requestID'],
                 'arrival_time': self.ev_data[agent_idx]['arrival_time'],
                 'departure_time': self.ev_data[agent_idx]['departure_time'],
+                'departure_soc': self.ev_data[agent_idx]['departure_soc'], # Add 'departure_soc' to the charging_records DataFrame
                 'initial_soc': self.ev_data[agent_idx]['initial_soc'],
                 'final_soc': self.ev_data[agent_idx]['soc'],
                 'charging_power': (self.ev_data[agent_idx]['soc'] - self.ev_data[agent_idx]['initial_soc']) * self.C_k, # kWh
@@ -80,12 +104,14 @@ class EVChargingEnv:
             
             # Reset EV data for the selected charging pile
             self.ev_data[agent_idx] = {'requestID': None, 
-                                       'arrival_time': None, 
-                                       'departure_time': None, 
-                                       'initial_soc': 0.0, 
-                                       'soc': 0.0, 
-                                       'charging_history': [], 
-                                       'time_before_soc_max': None}
+                                        'arrival_time': None, 
+                                        'departure_time': None, 
+                                        'initial_soc': 0.0, 
+                                        'soc': 0.0, 
+                                        'charging_history': [], 
+                                        'time_before_soc_max': None,
+                                        'time_before_soc_min': None,
+                                        'connected': False} 
         else:
             logger.warning(f"Charging pile {agent_idx} is not connected.")
             return None
@@ -111,9 +137,37 @@ class EVChargingEnv:
     """Reset the environment."""
     def reset(self):
         self.current_step = 0
-        self.ev_data = [{'requestID': None, 'arrival_time': None, 'departure_time': None, 'initial_soc': 0.0, 'soc': 0.0, 'charging_history': [], 'time_before_soc_max': None} for _ in range(self.num_agents)]
+        self.ev_data = [{'requestID': None, 
+                         'arrival_time': None, 
+                         'departure_time': None, 
+                         'initial_soc': 0.0, 
+                         'soc': 0.0, 
+                         'charging_history': [], 
+                         'time_before_soc_max': None,
+                         'time_before_soc_min': None,
+                         'connected': False} 
+                        for _ in range(self.num_agents)]
+        
         self.current_parking = np.zeros(self.num_agents, dtype=bool)
         self.current_parking_number = 0
+        
+        # Reset the charging records and SoC history
+        self.charging_records = pd.DataFrame(columns=['requestID', 
+                                                      'arrival_time', 
+                                                      'departure_time', 
+                                                      'initial_soc', 
+                                                      'departure_soc',
+                                                      'final_soc', 
+                                                      'charging_power', 
+                                                      'charging_time']) 
+        
+        # Initialize a DataFrame to store SoC history
+        self.soc_history = pd.DataFrame(columns=['requestID', 
+                                                 'current_time', 
+                                                 'soc', 
+                                                 'SoC_upper_bound', 
+                                                 'SoC_lower_bound']) 
+        
         return self.ev_data
 
 

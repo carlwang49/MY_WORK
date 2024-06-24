@@ -8,12 +8,10 @@ if __name__ == '__main__':
     """
     Run a simulation of the EV charging environment with random EV request data and random charging power selection.
     """
-
-    # Set random seed for reproducibility and create an EV charging environment
+    # Set random seed for reproducibility
     np.random.seed(42)
-    num_agents = 20
-    env = EVChargingEnv(num_agents)
-
+    num_agents = 10
+    
     # Generate random EV request data
     base_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     arrival_times = [base_date + timedelta(hours=int(np.random.uniform(8, 12))) for _ in range(num_agents)]
@@ -37,6 +35,9 @@ if __name__ == '__main__':
     current_time = base_date
     end_time = base_date + timedelta(hours=24)
     time_interval = 1  # 1 hour
+    
+    # Set random seed for reproducibility and create an EV charging environment
+    env = EVChargingEnv(num_agents, current_time, end_time)
 
     while current_time <= end_time:
         
@@ -78,5 +79,5 @@ if __name__ == '__main__':
         current_time += timedelta(hours=time_interval)
 
     # Save the charging records and SoC history to CSV files
-    env.soc_history.to_csv('../Result/soc_history.csv', index=False)
-    env.charging_records.to_csv('../Result/charging_records.csv', index=False)
+    env.soc_history.to_csv('../Result/Random/soc_history.csv', index=False)
+    env.charging_records.to_csv('../Result/Random/charging_records.csv', index=False)
