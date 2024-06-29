@@ -6,7 +6,7 @@ from datetime import datetime
 # logger config
 fmt = '<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | pid=<cyan>{process}</cyan> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>'
 charging_station_config = {"num": 10}
-log_path = f"../log/MADDPG-agent_num-{charging_station_config['num']}/{datetime.now().strftime('%Y%m-%d_%H:%M:%S')}.log"
+log_path = f"../log/VDN-agent_num-{charging_station_config['num']}/{datetime.now().strftime('%Y%m-%d_%H:%M:%S')}.log"
 
 # add a console handler to print the log
 def filter_console(record):

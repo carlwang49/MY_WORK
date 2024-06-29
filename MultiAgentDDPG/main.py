@@ -12,11 +12,11 @@ from utils import prepare_ev_request_data, create_result_dir, get_running_reward
 
 # Define the start and end date of the EV request data
 start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-07-02'
+end_date = END_DATE = '2018-12-31'
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 7, 2)
+end_time = END_TIME = datetime(2018, 12, 31)
 
 # Define the number of agents
 num_agents = NUM_AGENTS = 10
@@ -96,7 +96,6 @@ if __name__ == '__main__':
                         action[agent_id] = -1 # set the action to -1
             else:
                 action = maddpg.select_action(obs) # select action using MADDPG
-                print(action)
             
             # step the environment
             next_obs, reward, done, info = env.step(action, env.timestamp)
