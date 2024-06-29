@@ -251,7 +251,7 @@ class EVChargingEnv:
 
         return SoC_lower_bound, SoC_upper_bound
 
-    # Deprecated method
+
     """Get the power constraints for the DEB algorithm."""
     def get_deb_constraints(self, agent_idx, current_time: datetime):
         
