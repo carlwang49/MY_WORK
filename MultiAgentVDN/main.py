@@ -18,12 +18,12 @@ sys.path.insert(0,'./env')
 sys.path.insert(0,'./utils')
 
 # Define the start and end date of the EV request data
-start_date = START_DATE = '2018-07-02'
-end_date = END_DATE = '2018-07-03'
+start_date = START_DATE = '2018-07-01'
+end_date = END_DATE = '2018-12-31'
 
 # Define the start and end time of the EV request data
-start_time = START_TIME = datetime(2018, 7, 2)
-end_time = END_TIME = datetime(2018, 7, 3)
+start_time = START_TIME = datetime(2018, 7, 1)
+end_time = END_TIME = datetime(2018, 12, 31)
 
 # Define the number of agents
 num_agents = NUM_AGENTS = 10
@@ -134,12 +134,12 @@ if __name__ == '__main__':
     
     kwargs = {'env_name': 'dummy',
             'lr': 0.001,
-            'batch_size': 64,
+            'batch_size': 1024,
             'gamma': 0.99,
             'buffer_limit': 50000, #50000
             'update_target_interval': 20,
             'log_interval': 100,
-            'max_episodes': 3000,
+            'max_episodes': 6000,
             'max_epsilon': 0.9,
             'min_epsilon': 0.25,
             'test_episodes': 5,
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     
     VDNagent, reward_history, epsilon_history, env = train_VDN_agent(**kwargs)
     result_dir = create_result_dir('VDN')
-    plot_scores_epsilon(reward_history, epsilon_history, moving_avg_window = 50)
+    plot_scores_epsilon(reward_history, epsilon_history, result_dir, moving_avg_window = 50)
     
     
     # save soc history and charging records

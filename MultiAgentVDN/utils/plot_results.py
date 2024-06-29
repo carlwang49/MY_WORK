@@ -7,7 +7,7 @@ def movingaverage(interval, window_size):
     return np.convolve(interval, window, 'same')
 
 # Function that plots scores and epsilon against number of episodes
-def plot_scores_epsilon(rewards_history, epsilon_history, moving_avg_window=100):
+def plot_scores_epsilon(rewards_history, epsilon_history, result_dir, moving_avg_window=100):
     
     team_rewards = [sum(x) for x in zip(*rewards_history)]
     
@@ -25,4 +25,4 @@ def plot_scores_epsilon(rewards_history, epsilon_history, moving_avg_window=100)
     axarr[1].legend()
 
     plt.show()
-    plt.savefig('Scores_Episodes_Result.png')
+    plt.savefig(result_dir + '/Scores_Episodes_Result.png')

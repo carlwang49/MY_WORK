@@ -297,14 +297,14 @@ class EVBuildingEnv(EVChargingEnv):
             })
             
             # Log the EV data
-            logger.bind(console=True).info(f"requestID: {self.ev_data[selected_agent]['requestID']}")
-            logger.bind(console=True).info(f"initial_soc: {self.ev_data[selected_agent]['initial_soc']}")
-            logger.bind(console=True).info(f"departure_soc: {self.ev_data[selected_agent]['departure_soc']}")
-            logger.bind(console=True).info(f"arrival_time: {self.ev_data[selected_agent]['arrival_time']}")
-            logger.bind(console=True).info(f"departure_time: {self.ev_data[selected_agent]['departure_time']}")
-            logger.bind(console=True).info(f"time_before_soc_max: {self.ev_data[selected_agent]['time_before_soc_max']}")
-            logger.bind(console=True).info(f"time_before_soc_min: {self.ev_data[selected_agent]['time_before_soc_min']}")
-            logger.bind(console=True).info('-' * 50)
+            # logger.bind(console=True).info(f"requestID: {self.ev_data[selected_agent]['requestID']}")
+            # logger.bind(console=True).info(f"initial_soc: {self.ev_data[selected_agent]['initial_soc']}")
+            # logger.bind(console=True).info(f"departure_soc: {self.ev_data[selected_agent]['departure_soc']}")
+            # logger.bind(console=True).info(f"arrival_time: {self.ev_data[selected_agent]['arrival_time']}")
+            # logger.bind(console=True).info(f"departure_time: {self.ev_data[selected_agent]['departure_time']}")
+            # logger.bind(console=True).info(f"time_before_soc_max: {self.ev_data[selected_agent]['time_before_soc_max']}")
+            # logger.bind(console=True).info(f"time_before_soc_min: {self.ev_data[selected_agent]['time_before_soc_min']}")
+            # logger.bind(console=True).info('-' * 50)
         else:
             logger.bind(console=True).warning("No available charging piles.")
             return None
