@@ -8,7 +8,8 @@ class EVChargingEnv:
         self.num_agents = num_agents
         self.current_parking = np.zeros(num_agents, dtype=bool)  # Whether the charging pile is connected
         self.current_parking_number = 0  # Number of currently connected charging piles
-        self.previous_parking_number = 0  # Number of previously connected charging piles
+        self.SoC_upper_bound_list = [0 for _ in range(num_agents)]  # Upper bound of SoC
+        self.SoC_lower_bound_list = [0 for _ in range(num_agents)]  # Lower bound of SoC
         
         # Initialize the time range
         self.start_time = start_time
@@ -28,8 +29,8 @@ class EVChargingEnv:
                          'arrival_time': None, 
                          'departure_time': None, 
                          'initial_soc': 0.0, 
+                         'departure_soc': 0.0,
                          'soc': 0.0, 
-                         'charging_history': [], 
                          'time_before_soc_max': None,
                          'time_before_soc_min': None,
                          'connected': False} 
@@ -58,7 +59,7 @@ class EVChargingEnv:
         if len(available_piles) > 0:
             selected_pile = np.random.choice(available_piles)  # Randomly select an unconnected charging pile
             self.current_parking[selected_pile] = True  # Connect the selected charging pile
-            # self.current_parking_number += 1
+            self.SoC_lower_bound_list[selected_pile] = self.SoC_upper_bound_list[selected_pile] = initial_soc  # Set the lower bound of SoC
             
             # Initialize EV data for the selected charging pile
             self.ev_data[selected_pile] = {
@@ -68,23 +69,31 @@ class EVChargingEnv:
                 'initial_soc': initial_soc,
                 'departure_soc': departure_soc,
                 'soc': initial_soc,
-                'charging_history': [],  # Initialize an empty list to store charging records
                 'time_before_soc_max': arrival_time + timedelta(minutes=((self.soc_max - initial_soc) * self.C_k / self.max_charging_power) * 60), # Calculate the time before the SoC reaches the maximum value
                 'time_before_soc_min': arrival_time + timedelta(minutes=((self.soc_min - initial_soc) * self.C_k / self.max_discharging_power) * 60), # Calculate the time before the SoC reaches the minimum value
                 'connected': True # Indicate that the charging pile is connected
             }
             
+            # Record the SoC history
+            self.soc_history.loc[len(self.soc_history)] = ({
+                'requestID': self.ev_data[selected_pile]['requestID'],  # Add 'requestID' to the soc_history DataFrame
+                'current_time': arrival_time, # Add the current time to the soc_history DataFrame
+                'soc': self.ev_data[selected_pile]['soc'], # Add the current SoC to the soc_history DataFrame
+                'SoC_upper_bound': self.SoC_upper_bound_list[selected_pile], # Add the upper bound of SoC to the soc_history DataFrame
+                'SoC_lower_bound': self.SoC_lower_bound_list[selected_pile]  # Add the lower bound of SoC to the soc_history DataFrame
+            })
+            
             # Log the EV data
-            logger.info(f"requestID: {self.ev_data[selected_pile]['requestID']}")
-            logger.info(f"initial_soc: {self.ev_data[selected_pile]['initial_soc']}")
-            logger.info(f"departure_soc: {self.ev_data[selected_pile]['departure_soc']}")
-            logger.info(f"arrival_time: {self.ev_data[selected_pile]['arrival_time']}")
-            logger.info(f"departure_time: {self.ev_data[selected_pile]['departure_time']}")
-            logger.info(f"time_before_soc_max: {self.ev_data[selected_pile]['time_before_soc_max']}")
-            logger.info(f"time_before_soc_min: {self.ev_data[selected_pile]['time_before_soc_min']}")
-            logger.info('-' * 50)
+            # logger.bind(console=True).info(f"requestID: {self.ev_data[selected_pile]['requestID']}")
+            # logger.bind(console=True).info(f"initial_soc: {self.ev_data[selected_pile]['initial_soc']}")
+            # logger.bind(console=True).info(f"departure_soc: {self.ev_data[selected_pile]['departure_soc']}")
+            # logger.bind(console=True).info(f"arrival_time: {self.ev_data[selected_pile]['arrival_time']}")
+            # logger.bind(console=True).info(f"departure_time: {self.ev_data[selected_pile]['departure_time']}")
+            # logger.bind(console=True).info(f"time_before_soc_max: {self.ev_data[selected_pile]['time_before_soc_max']}")
+            # logger.bind(console=True).info(f"time_before_soc_min: {self.ev_data[selected_pile]['time_before_soc_min']}")
+            # logger.bind(console=True).info('-' * 50)
         else:
-            logger.warning("No available charging piles.")
+            logger.bind(console=True).warning("No available charging piles.")
             return None
         
     def remove_ev(self, agent_idx):
@@ -102,18 +111,29 @@ class EVChargingEnv:
                 'charging_time': (self.ev_data[agent_idx]['departure_time'] - self.ev_data[agent_idx]['arrival_time']).seconds / 3600 # Convert seconds to hours
             }
             
+            # Record the SoC history
+            self.soc_history.loc[len(self.soc_history)] = ({
+                'requestID': self.ev_data[agent_idx]['requestID'],  # Add 'requestID' to the soc_history DataFrame
+                'current_time': self.ev_data[agent_idx]['departure_time'], # Add the current time to the soc_history DataFrame
+                'soc': self.ev_data[agent_idx]['soc'], # Add the current SoC to the soc_history DataFrame
+                'SoC_upper_bound': self.SoC_upper_bound_list[agent_idx], # Add the upper bound of SoC to the soc_history DataFrame
+                'SoC_lower_bound': self.SoC_lower_bound_list[agent_idx]  # Add the lower bound of SoC to the soc_history DataFrame
+            })
+            
             # Reset EV data for the selected charging pile
             self.ev_data[agent_idx] = {'requestID': None, 
                                         'arrival_time': None, 
                                         'departure_time': None, 
                                         'initial_soc': 0.0, 
+                                        'departure_soc': 0.0,
                                         'soc': 0.0, 
-                                        'charging_history': [], 
                                         'time_before_soc_max': None,
                                         'time_before_soc_min': None,
                                         'connected': False} 
+            
+            
         else:
-            logger.warning(f"Charging pile {agent_idx} is not connected.")
+            logger.bind(console=True).warning(f"Charging pile {agent_idx} is not connected.")
             return None
     
     
@@ -129,7 +149,7 @@ class EVChargingEnv:
     """Get the EV data for a specific charging pile."""
     def get_agent_status(self, agent_idx):
         if agent_idx < 0 or agent_idx >= self.num_agents:
-            print(f"Agent index {agent_idx} out of range.")
+            logger.bind(console=True).info(f"Agent index {agent_idx} out of range.")
             return None
         return self.ev_data[agent_idx]
     
@@ -140,8 +160,8 @@ class EVChargingEnv:
                          'arrival_time': None, 
                          'departure_time': None, 
                          'initial_soc': 0.0, 
+                         'departure_soc': 0.0,
                          'soc': 0.0, 
-                         'charging_history': [], 
                          'time_before_soc_max': None,
                          'time_before_soc_min': None,
                          'connected': False} 
@@ -149,6 +169,7 @@ class EVChargingEnv:
         
         self.current_parking = np.zeros(self.num_agents, dtype=bool)
         self.current_parking_number = 0
+        self.timestamp = self.start_time
         
         # Reset the charging records and SoC history
         self.charging_records = pd.DataFrame(columns=['requestID', 
@@ -172,18 +193,20 @@ class EVChargingEnv:
 
     """Update the SoC of a specific charging pile."""
     def step(self, agent_idx, action: float, current_time: datetime, SoC_lower_bound, SoC_upper_bound, time_interval: int = 60):
-    
-        self.ev_data[agent_idx]['soc'] = (self.ev_data[agent_idx]['soc'] * self.C_k + action * (time_interval / 60)) / self.C_k  # Update SoC
-        self.ev_data[agent_idx]['soc'] = np.clip(self.ev_data[agent_idx]['soc'], self.soc_min, self.soc_max)  # Ensure SoC is within a reasonable range
         
         # Record the SoC history
         self.soc_history.loc[len(self.soc_history)] = ({
             'requestID': self.ev_data[agent_idx]['requestID'],  # Add 'requestID' to the soc_history DataFrame
             'current_time': current_time, # Add the current time to the soc_history DataFrame
             'soc': self.ev_data[agent_idx]['soc'], # Add the current SoC to the soc_history DataFrame
-            'SoC_upper_bound': SoC_upper_bound, # Add the upper bound of SoC to the soc_history DataFrame
-            'SoC_lower_bound': SoC_lower_bound  # Add the lower bound of SoC to the soc_history DataFrame
+            'SoC_upper_bound': self.SoC_upper_bound_list[agent_idx], # Add the upper bound of SoC to the soc_history DataFrame
+            'SoC_lower_bound': self.SoC_lower_bound_list[agent_idx]  # Add the lower bound of SoC to the soc_history DataFrame
         })
+
+        # Update the SoC of the charging pile
+        self.ev_data[agent_idx]['soc'] = (self.ev_data[agent_idx]['soc'] * self.C_k + action * (time_interval / 60)) / self.C_k  # Update SoC
+        self.ev_data[agent_idx]['soc'] = np.clip(self.ev_data[agent_idx]['soc'], self.soc_min, self.soc_max)  # Ensure SoC is within a reasonable range
+        self.SoC_lower_bound_list[agent_idx], self.SoC_upper_bound_list[agent_idx] = SoC_lower_bound, SoC_upper_bound
 
 
     """Get the SoC of a specific charging pile."""
@@ -194,16 +217,13 @@ class EVChargingEnv:
     """Get the maximum and minimum SoC based on the current time."""
     def get_soc_max_and_min(self, agent_idx, current_time: datetime):
         
-        if current_time == self.ev_data[agent_idx]['arrival_time']:
-            return self.ev_data[agent_idx]['initial_soc'], self.ev_data[agent_idx]['initial_soc']
-        
         SoC_lower_bound, SoC_upper_bound = self.soc_min, self.soc_max # Initialize the lower and upper bounds of SoC
-        previous_parking_number = self.previous_parking_number if self.previous_parking_number > 0 else 1   # Get the number of previously connected charging piles
+        current_parking_number = self.current_parking_number if self.current_parking_number > 0 else 1   # Get the number of previously connected charging piles
         
         # Calculate the time needed to reach the departure SoC
         t_needed = self.ev_data[agent_idx]['departure_time'] - \
             timedelta(minutes=int((( self.ev_data[agent_idx]['departure_soc'] - \
-                self.soc_min) * self.C_k / (self.max_charging_power / previous_parking_number)) * 60)) # Calculate the time needed to reach the departure SoC
+                self.soc_min) * self.C_k / (self.max_charging_power / current_parking_number)) * 60)) # Calculate the time needed to reach the departure SoC
 
         if current_time > t_needed:
             # Calculate the lower bound of SoC based on the time needed to reach the departure SoC
@@ -213,7 +233,7 @@ class EVChargingEnv:
             # Calculate the charging power based on the time needed to reach the departure SoC
             charging_power = (SoC_lower_bound - self.soc_min) * self.C_k / (current_time - t_needed).seconds * 3600 
             if charging_power > self.max_charging_power:
-                SoC_lower_bound = self.soc_min + (self.max_charging_power / previous_parking_number) * (current_time - t_needed).seconds / 3600 / self.C_k 
+                SoC_lower_bound = self.soc_min + (self.max_charging_power / current_parking_number) * (current_time - t_needed).seconds / 3600 / self.C_k 
                 
         elif current_time < self.ev_data[agent_idx]['time_before_soc_min']:
             # Calculate the upper bound of SoC based on the time before the SoC reaches the minimum value
@@ -231,7 +251,7 @@ class EVChargingEnv:
 
         return SoC_lower_bound, SoC_upper_bound
 
-
+    # Deprecated method
     """Get the power constraints for the DEB algorithm."""
     def get_deb_constraints(self, agent_idx, current_time: datetime):
         
@@ -243,4 +263,14 @@ class EVChargingEnv:
         P_min_tk = max(self.max_discharging_power, (SoC_lower_bound - SoC_tk) * self.C_k * eta_star) #  Calculate the minimum charging power
         
         return P_max_tk, P_min_tk, SoC_lower_bound, SoC_upper_bound
-
+    
+    
+    """Get the maximum and minimum charging power based on the current SoC."""
+    def get_P_max_tk_and_P_min_tk(self, agent_idx, SoC_lower_bound, SoC_upper_bound):
+        
+        SoC_tk = self.ev_data[agent_idx]['soc'] # Get the current SoC
+        eta_star = 1 / self.eta if SoC_tk > SoC_lower_bound else self.eta # Calculate the charging efficiency based on the current SoC
+        P_max_tk = min(self.max_charging_power, (SoC_upper_bound - SoC_tk) * self.C_k * eta_star) # Calculate the maximum charging power
+        P_min_tk = max(self.max_discharging_power, (SoC_lower_bound - SoC_tk) * self.C_k * eta_star) #  Calculate the minimum charging power
+        
+        return P_max_tk, P_min_tk
