@@ -46,7 +46,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.observation_spaces = [Box(low=0, high=1, shape=(5,), dtype=np.float32) for i in range(num_agents)]
         self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = [Discrete(len(self.action_values)) for i in range(num_agents)]
-        self.dones = {f'station_{i}': False for i in range(num_agents)}
+        self.dones = {f'agent_{i}': False for i in range(num_agents)}
         
         # Calculate the average of the top 10% of historical peak electricity consumption
         sorted_load_history = self.building_load['Total_Power(kWh)'].sort_values(ascending=False)
@@ -100,10 +100,10 @@ class EVBuildingEnv(EVChargingEnv):
     def observe(self, agent_id, current_time: datetime):
         # If the current time is the start time, return the initial state
         if current_time == self.start_time or self.agents_status[f'agent_{agent_id}'] == False:
-            return [0.0, 0.0, 0.0, 0.0, 0.0]
+            return (0.0, 0.0, 0.0, 0.0, 0.0)
     
         # Get the current SoC
-        soc = round(self.ev_data[f'agent_{agent_id}']['soc'], 2)
+        soc = round(self.ev_data[f'agent_{agent_id}']['soc'], 1)
         
         # Get the normalized difference between the building load and the average of the top 10% of historical peak electricity consumption
         building_load = self.building_load[self.building_load['Date'] == current_time]['Total_Power(kWh)'].values[0]
@@ -120,7 +120,7 @@ class EVBuildingEnv(EVChargingEnv):
         emergency = float(emergency)
         
         # Return the state information
-        return [soc, normalized_load_diff, normalized_P_max_tk, normalized_P_min_tk, emergency]
+        return (soc, normalized_load_diff, normalized_P_max_tk, normalized_P_min_tk, emergency)
     
     
     """reset the environment to the initial state"""
@@ -140,7 +140,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.observation_spaces = [Box(low=0, high=1, shape=(5,), dtype=np.float32) for i in range(self.num_agents)]
         self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = [Discrete(len(self.action_values)) for i in range(self.num_agents)]
-        self.dones = {f'station_{i}': False for i in range(self.num_agents)}
+        self.dones = {f'agent_{i}': False for i in range(self.num_agents)}
         
         self.SoC_upper_bound_list = [0 for _ in range(self.num_agents)]  # Upper bound of SoC
         self.SoC_lower_bound_list = [0 for _ in range(self.num_agents)]  # Lower bound of SoC
@@ -208,7 +208,6 @@ class EVBuildingEnv(EVChargingEnv):
         
         # Initialize the rewards, dones, infos, and observations
         rewards = []
-        dones = [False for _ in self.agents]
         infos = []
         observations = []
         P_tk_dict = {agent_id: 0 for agent_id in self.agents}
@@ -259,7 +258,7 @@ class EVBuildingEnv(EVChargingEnv):
         
         self.timestamp = current_time + timedelta(minutes=time_interval) # Update the timestamp
         
-        return observations, rewards, dones, infos
+        return observations, rewards, self.dones, infos
 
 
     """add an electric vehicle (EV) to the environment"""
