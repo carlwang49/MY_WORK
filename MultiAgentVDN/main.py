@@ -103,7 +103,7 @@ def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval,
                 
                 memory.put((state, action, (np.array(reward)).tolist(), next_state, [int(all(connected))]))
                 state = next_state
-                
+        
                 for i in range(n_agents):
                     rewards_temp[i].append(reward[i])
                 
@@ -122,7 +122,7 @@ def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval,
             q_target.load_state_dict(q.state_dict())
 
         if (episode_i + 1) % log_interval == 0:
-            test_score = test(test_env, test_episodes, q, ev_request_dict)
+            test_score = test(test_env, test_episodes, q, ev_request_dict, ev_departure_dict)
             print("#{:<10}/{} episodes, test score: {:.1f} n_buffer : {}, eps : {:.2f}"
                   .format(episode_i, max_episodes, test_score, memory.size(), epsilon))
 
@@ -139,7 +139,7 @@ if __name__ == '__main__':
             'buffer_limit': 50000, #50000
             'update_target_interval': 20,
             'log_interval': 100,
-            'max_episodes': 6000,
+            'max_episodes': 3000,
             'max_epsilon': 0.9,
             'min_epsilon': 0.25,
             'test_episodes': 5,

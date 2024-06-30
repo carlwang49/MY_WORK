@@ -12,11 +12,11 @@ sys.path.insert(0,'./utils')
 
 # Define the start and end date of the EV request data
 start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-07-02'
+end_date = END_DATE = '2018-12-31'
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 7, 2)
+end_time = END_TIME = datetime(2018, 12, 31)
 
 # Define the number of agents
 num_agents = NUM_AGENTS = 10
@@ -25,7 +25,7 @@ parking_data_path = PARKING_DATA_PATH = '../Dataset/Sim_Parking/ev_parking_data_
 
 # HYPERPARAMETERS
 N_AGENTS = 10
-NUM_EPISODES = 600000
+NUM_EPISODES = 6000
 EPS_DECAY = 0.9999
 EPS_MIN = 0.3
 STEP_SIZE = 0.1

@@ -224,12 +224,12 @@ class EVChargingEnv:
         t_needed = self.ev_data[agent_idx]['departure_time'] - \
             timedelta(minutes=int((( self.ev_data[agent_idx]['departure_soc'] - \
                 self.soc_min) * self.C_k / (self.max_charging_power / current_parking_number)) * 60)) # Calculate the time needed to reach the departure SoC
-
+        
         if current_time > t_needed:
             # Calculate the lower bound of SoC based on the time needed to reach the departure SoC
             SoC_lower_bound = self.soc_min + \
                 (self.ev_data[agent_idx]['departure_soc'] - self.soc_min) * ((current_time - t_needed).seconds / (self.ev_data[agent_idx]['departure_time'] - t_needed).seconds)
-            print((current_time - t_needed))
+                
             # Calculate the charging power based on the time needed to reach the departure SoC
             charging_power = (SoC_lower_bound - self.soc_min) * self.C_k / (current_time - t_needed).seconds * 3600 
             if charging_power > self.max_charging_power:

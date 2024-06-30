@@ -33,21 +33,20 @@ def train(q, q_target, memory, optimizer, gamma, batch_size, update_iter=10, chu
         optimizer.step()
         
         
-def test(env: EVBuildingEnv, num_episodes, q, ev_request_dict):
+def test(env: EVBuildingEnv, num_episodes, q, ev_request_dict, ev_departure_dict):
     score = 0
     for episode_i in range(num_episodes):
+        
         step_counter = 0
         state = env.reset()
-        connected = [False for _ in range(len(env.agents))]
         env.timestamp = env.start_time
+        
         with torch.no_grad():
             hidden = q.init_hidden()
             while env.timestamp <= env.end_time: 
                 
-                env.count = 0 # count the number of EVs that have arrived
-                current_requests = ev_request_dict.get(env.timestamp, []) # get the EVs that have arrived at the current time
-                
                 # add EVs to the environment, if there are EVs that have arrived at the current time
+                current_requests = ev_request_dict.get(env.timestamp, []) # get the EVs that have arrived at the current time
                 if current_requests:
                     for ev in current_requests:
                         env.add_ev(ev['requestID'], 
@@ -57,7 +56,17 @@ def test(env: EVBuildingEnv, num_episodes, q, ev_request_dict):
                                 ev['departure_soc'])
                         
                         env.current_parking_number += 1 # increase the number of EVs in the environment
-                        env.count += 1 # increase the number of EVs that have arrived
+                            
+                # Remove EVs that departed at the current time
+                current_departures = ev_departure_dict.get(env.timestamp, [])
+                if current_departures:
+                    for ev in current_departures:
+                        request_id = ev['requestID']
+                        for agent_id, data in env.ev_data.items():
+                            if data['requestID'] == request_id:
+                                env.remove_ev(agent_id)
+                                env.current_parking_number -= 1
+                                break 
                         
                 step_counter += 1
                 action, hidden = q.sample_action(torch.Tensor(state).unsqueeze(0), hidden, epsilon=0)

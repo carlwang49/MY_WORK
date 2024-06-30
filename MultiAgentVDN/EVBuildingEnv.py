@@ -128,6 +128,8 @@ class EVBuildingEnv(EVChargingEnv):
         
         # Reset the timestamp to the start time
         self.timestamp = self.start_time # Reset the timestamp to the start time
+        self.current_parking_number = 0
+        self.current_parking = np.zeros(self.num_agents, dtype=bool)
         
         # Initialize the environment
         self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
