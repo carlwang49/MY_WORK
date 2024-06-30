@@ -138,7 +138,6 @@ if __name__ == '__main__':
     result_dir = create_result_dir('IQL')
     plot_scores_epsilon(reward_history, epsilon_history, result_dir, moving_avg_window = 50)
     
-    
     # save soc history and charging records
     soc_history_file = f'{result_dir}/soc_history.csv'
     charging_records_file = f'{result_dir}/charging_records.csv'
