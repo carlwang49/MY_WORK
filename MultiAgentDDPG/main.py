@@ -7,16 +7,17 @@ from MADDPG import MADDPG
 from logger_config import configured_logger as logger
 from maddpg_parameter import parse_args, get_env
 from utils import prepare_ev_request_data, create_result_dir, get_running_reward, prepare_ev_departure_data
+from tqdm import tqdm
 
 # TODO: 合併 start_time, start_date, end_time, end_date
 
 # Define the start and end date of the EV request data
 start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-12-31'
+end_date = END_DATE = '2018-09-30'
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 12, 31)
+end_time = END_TIME = datetime(2018, 9, 30)
 
 # Define the number of agents
 num_agents = NUM_AGENTS = 10
@@ -49,7 +50,7 @@ if __name__ == '__main__':
     }
     
     # training
-    for episode in range(args.episode_num):
+    for episode in tqdm(range(args.episode_num)):
         
         # reset the timestamp to the start time of the environment
         env.timestamp = env.start_time 
