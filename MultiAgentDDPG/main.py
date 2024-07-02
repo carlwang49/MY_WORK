@@ -95,8 +95,8 @@ if __name__ == '__main__':
                         # if the agent is not connected
                         action[agent_id] = -1 # set the action to -1
             else:
-                action = maddpg.select_action(obs) # select action using MADDPG
-            
+                action = maddpg.select_action(obs, env.agents_status) # select action using MADDPG
+
             # step the environment
             next_obs, reward, done, info = env.step(action, env.timestamp)
 
@@ -109,7 +109,7 @@ if __name__ == '__main__':
             
             # learn from the replay buffer
             if step >= args.random_steps and step % args.learn_interval == 0:  # learn every few steps
-                maddpg.learn(args.batch_size, args.gamma) # learn from the replay buffer
+                maddpg.learn(args.batch_size, args.gamma, env.agents_status) # learn from the replay buffer
                 maddpg.update_target(args.tau) # update target network
                 
             # update observation

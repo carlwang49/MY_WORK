@@ -57,7 +57,7 @@ class MADDPG:
             d = done[agent_id]
             self.buffers[agent_id].add(o, a, r, next_o, d)
 
-    def sample(self, batch_size):
+    def sample(self, batch_size, agents_status):
         """sample experience from all the agents' buffers, and collect data for network input"""
         # get the total num of transitions, these buffers should have same number of transitions
         total_num = len(self.buffers['agent_0'])
@@ -74,24 +74,24 @@ class MADDPG:
             next_obs[agent_id] = n_o
             done[agent_id] = d
             # calculate next_action using target_network and next_state
-            next_act[agent_id] = self.agents[agent_id].target_action(n_o)
+            next_act[agent_id] = self.agents[agent_id].target_action(n_o, agents_status[agent_id])
 
         return obs, act, reward, next_obs, done, next_act
 
-    def select_action(self, obs):
+    def select_action(self, obs, agents_status):
         actions = {}
         for agent, o in obs.items():
             o = torch.from_numpy(o).unsqueeze(0).float()
-            a = self.agents[agent].action(o)  # torch.Size([1, action_size])
+            a = self.agents[agent].action(o, agents_status[agent])  # torch.Size([1, action_size])
             # NOTE that the output is a tensor, convert it to int before input to the environment
             # actions[agent] = a.squeeze(0).argmax().item()
             actions[agent] = a.squeeze(0).item()
             self.logger.info(f'{agent} action: {actions[agent]}')
         return actions
 
-    def learn(self, batch_size, gamma):
+    def learn(self, batch_size, gamma, agents_status):
         for agent_id, agent in self.agents.items():
-            obs, act, reward, next_obs, done, next_act = self.sample(batch_size)
+            obs, act, reward, next_obs, done, next_act = self.sample(batch_size, agents_status)
 
             # update critic
             critic_value = agent.critic_value(list(obs.values()), list(act.values()))
@@ -106,7 +106,7 @@ class MADDPG:
 
             # update actor
             # action of the current agent is calculated using its actor
-            action, logits = agent.action(obs[agent_id], model_out=True)
+            action, logits = agent.action(obs[agent_id], agents_status[agent_id], model_out=True)
             act[agent_id] = action
             actor_loss = -agent.critic_value(list(obs.values()), list(act.values())).mean()
             actor_loss_pse = torch.pow(logits, 2).mean()

@@ -29,14 +29,18 @@ class Agent:
         probabilities = F.softmax(logits / tau, dim=-1)
         return probabilities
 
-    def action(self, obs, model_out=False):
+    def action(self, obs, agent_status, model_out=False):
         # this method is called in the following two cases:
         # a) interact with the environment
         # b) calculate action when update actor, where input(obs) is sampled from replay buffer with size:
         # torch.Size([batch_size, state_dim])
         obs = obs.to(self.device)
         logits = self.actor(obs)  # torch.Size([batch_size, action_size])
-
+        
+        if not agent_status:
+            # Apply masking: setting logits of invalid actions to a large negative value
+            logits[:, 0] = -1e10  # Assuming the invalid action corresponds to index 0
+            
         # action = self.gumbel_softmax(logits)
         # action = F.gumbel_softmax(logits, hard=True)
         
@@ -46,11 +50,16 @@ class Agent:
             return action, logits
         return action
 
-    def target_action(self, obs):
+    def target_action(self, obs, agent_status):
         # when calculate target critic value in MADDPG,
         # we use target actor to get next action given next states,
         # which is sampled from replay buffer with size torch.Size([batch_size, state_dim])
         logits = self.target_actor(obs)  # torch.Size([batch_size, action_size])
+        
+        if not agent_status:
+            # Apply masking: setting logits of invalid actions to a large negative value
+            logits[:, 0] = -1e10  # Assuming the invalid action corresponds to index 0
+            
         # action = self.gumbel_softmax(logits)
         # action = F.gumbel_softmax(logits, hard=True)
         action = torch.tanh(logits)
