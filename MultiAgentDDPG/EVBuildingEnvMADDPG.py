@@ -38,7 +38,6 @@ class EVBuildingEnv(EVChargingEnv):
         # Initialize building load
         self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
         self.building_load = self.set_building_time_range(start_time, end_time)
-        
         self.count = None
         self.original_load = None
  
@@ -63,6 +62,9 @@ class EVBuildingEnv(EVChargingEnv):
         self.min_load_diff = self.min_load - self.average_top_10_percent
         self.max_load_diff = self.max_load - self.average_top_10_percent
         
+        # peak and valley load at current day
+        self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_current_peak_and_valley_load()
+
         # Store the building load history
         self.load_history = [] 
         
@@ -135,6 +137,9 @@ class EVBuildingEnv(EVChargingEnv):
         self.timestamp = self.start_time # Reset the timestamp to the start time
         self.count = None
         
+        # peak and valley load at current day
+        self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_current_peak_and_valley_load()
+        
         # Initialize the environment
         self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
         self.building_load = self.set_building_time_range(self.start_time, self.end_time)
@@ -204,8 +209,11 @@ class EVBuildingEnv(EVChargingEnv):
                 P_tk = P_tk_dict[agent_id]
                 r_tk = -P_tk * current_price
                 r_soc = -np.exp(abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))) ** 2
-                r_balance = P_tk * (self.average_top_10_percent - original_load) / self.standard_deviation
-                rewards[agent_id] = alpha * r_tk + (1 - alpha) * r_soc + r_balance * beta
+                new_load = original_load + P_tk_dict[agent_id]
+                load_deviation = abs(new_load - self.curr_mean)
+                r_balance = -load_deviation / self.curr_std
+                # rewards[agent_id] = alpha * r_tk + (1 - alpha) * r_soc + r_balance * beta
+                rewards[agent_id] = r_balance
 
         return rewards
 
@@ -265,6 +273,10 @@ class EVBuildingEnv(EVChargingEnv):
         }
         
         self.timestamp = current_time + timedelta(minutes=time_interval) # Update the timestamp
+        
+        if self.timestamp.date() != current_time.date():
+            # update the peak and valley load at the next day
+            self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_current_peak_and_valley_load()
         
         return observations, rewards, dones, infos
 
@@ -361,3 +373,13 @@ class EVBuildingEnv(EVChargingEnv):
         
         return round(reasonable_soc, 2)       
     
+
+    def get_current_peak_and_valley_load(self):
+        """Get the peak and valley load at the current time"""
+        
+        current_date = self.timestamp.date()
+        df_current_day = self.building_load[self.building_load['Date'].dt.date == current_date].copy()
+        df_current_day = df_current_day[(df_current_day['Date'].dt.time >= pd.to_datetime('08:00:00').time()) & 
+                                    (df_current_day['Date'].dt.time <= pd.to_datetime('22:00:00').time())]
+        
+        return df_current_day['Total_Power(kWh)'].max(), df_current_day['Total_Power(kWh)'].min(), df_current_day['Total_Power(kWh)'].mean(), df_current_day['Total_Power(kWh)'].std()

@@ -18,7 +18,6 @@ def prepare_ev_request_data(parking_data_path, start_date, end_date):
     ev_request_data = ev_request_data[(ev_request_data['date'] >= start_date) & (ev_request_data['date'] < end_date)].copy()
     ev_request_data['date'] = pd.to_datetime(ev_request_data['date']).dt.date 
     ev_request_dict = ev_request_data.groupby(ev_request_data['arrival_time']).apply(lambda x: x.to_dict(orient='records')).to_dict()
-    ev_departure_dict = ev_request_data.groupby(ev_request_data['departure_time']).apply(lambda x: x.to_dict(orient='records')).to_dict()
     
     return ev_request_dict
 
