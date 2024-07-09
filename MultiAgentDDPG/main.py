@@ -20,7 +20,7 @@ start_time = START_TIME = datetime(2018, 7, 1)
 end_time = END_TIME = datetime(2018, 9, 30)
 
 # Define the number of agents
-num_agents = NUM_AGENTS = 10 
+num_agents = NUM_AGENTS = 20 
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{num_agents}.csv'
 
 
