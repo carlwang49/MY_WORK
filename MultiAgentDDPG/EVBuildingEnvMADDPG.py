@@ -221,13 +221,35 @@ class EVBuildingEnv(EVChargingEnv):
         return observations
     
     
+    # def calculate_reward(self, original_load, P_tk_dict: dict):
+
+    #     rewards = {agent_id: 0 for agent_id in self.agents}
+    #     current_price = self.tou_price_in_weekday[self.timestamp.hour] if self.timestamp.weekday() < 5 \
+    #         else self.tou_price_in_weekend[self.timestamp.hour]
+
+    #     total_action_impact = sum(P_tk_dict.values())
+    #     if total_action_impact * (original_load - self.curr_mean) > 0:
+    #         for agent_id in self.agents:
+    #             if self.agents_status[agent_id]:
+    #                 rewards[agent_id] += 1
+        
+    #     for agent_id in self.agents:
+    #         if self.agents_status[agent_id]:
+    #             P_tk = P_tk_dict[agent_id]
+    #             r_tk = -P_tk * current_price
+    #             r_soc = -abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
+    #             rewards[agent_id] = r_tk
+        
+    #     return rewards
+    
     def calculate_reward(self, original_load, P_tk_dict: dict):
 
         rewards = {agent_id: 0 for agent_id in self.agents}
         current_price = self.tou_price_in_weekday[self.timestamp.hour] if self.timestamp.weekday() < 5 \
             else self.tou_price_in_weekend[self.timestamp.hour]
 
-        total_action_impact = sum(P_tk_dict.values())
+
+        # total_action_impact = sum(P_tk_dict.values())
         # if total_action_impact * (original_load - self.curr_mean) > 0:
         #     for agent_id in self.agents:
         #         if self.agents_status[agent_id]:
@@ -236,8 +258,12 @@ class EVBuildingEnv(EVChargingEnv):
         for agent_id in self.agents:
             if self.agents_status[agent_id]:
                 P_tk = P_tk_dict[agent_id]
-                r_tk = -P_tk * current_price
-                r_soc = -abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
+                # r_tk = -P_tk * current_price
+                # r_soc = -abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
+                if P_tk * (original_load - self.curr_mean) > 0:
+                    r_tk = 1
+                else:
+                    r_tk = -1
                 rewards[agent_id] = r_tk
         
         return rewards
