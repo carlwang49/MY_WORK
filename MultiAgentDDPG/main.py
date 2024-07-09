@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 # Define the start and end date of the EV request data
 start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-09-02'
+end_date = END_DATE = '2018-07-02'
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = datetime(2018, 7, 1)
