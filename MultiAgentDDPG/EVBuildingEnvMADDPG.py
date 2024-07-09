@@ -228,18 +228,18 @@ class EVBuildingEnv(EVChargingEnv):
             else self.tou_price_in_weekend[self.timestamp.hour]
 
         total_action_impact = sum(P_tk_dict.values())
-        if total_action_impact * (original_load - self.curr_mean) < 0:
+        if total_action_impact * (original_load - self.curr_mean) > 0:
             for agent_id in self.agents:
                 if self.agents_status[agent_id]:
-                    rewards[agent_id] = float("-inf")
+                    rewards[agent_id] += 1
         else:
             for agent_id in self.agents:
                 if self.agents_status[agent_id]:
                     P_tk = P_tk_dict[agent_id]
                     r_tk = -P_tk * current_price
-                    r_soc = -np.exp(abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp)))
-                    rewards[agent_id] = alpha * r_soc + (1-alpha) * (-1/1+np.exp(-r_tk))
- 
+                    r_soc = -abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
+                    rewards[agent_id] += alpha * r_soc + (1-alpha) * (-1/1+np.exp(-r_tk))
+        
         return rewards
 
 
