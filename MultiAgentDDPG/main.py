@@ -34,7 +34,7 @@ if __name__ == '__main__':
     ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
     
     # create a new folder to save the result
-    result_dir = create_result_dir('MADDPG') 
+    result_dir = create_result_dir('TEST') 
     
     # create environment
     env, dim_info = get_env(num_agents, start_time, end_time) 

@@ -238,7 +238,7 @@ class EVBuildingEnv(EVChargingEnv):
                 P_tk = P_tk_dict[agent_id]
                 r_tk = -P_tk * current_price
                 r_soc = -abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
-                rewards[agent_id] += r_tk
+                rewards[agent_id] = r_tk
         
         return rewards
 

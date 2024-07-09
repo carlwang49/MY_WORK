@@ -4,10 +4,10 @@ from EVBuildingEnvMADDPG import EVBuildingEnv
 def parse_args():
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--episode_num', type=int, default=1000, help='total episode num during training procedure')
+    parser.add_argument('--episode_num', type=int, default=6000, help='total episode num during training procedure')
     parser.add_argument('--episode_length', type=int, default=10, help='steps per episode')
     parser.add_argument('--learn_interval', type=int, default=100, help='steps interval between learning time')
-    parser.add_argument('--random_steps', type=int, default=1e4, help='random steps before the agent start to learn')
+    parser.add_argument('--random_steps', type=int, default=5e4, help='random steps before the agent start to learn')
     parser.add_argument('--tau', type=float, default=0.02, help='soft update parameter')
     parser.add_argument('--gamma', type=float, default=0.98, help='discount factor')
     parser.add_argument('--buffer_capacity', type=int, default=int(6e4), help='capacity of replay buffer')
