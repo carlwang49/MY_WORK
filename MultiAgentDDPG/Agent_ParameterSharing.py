@@ -5,23 +5,19 @@ import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
 from torch.optim import Adam
-import numpy as np
 
 
 class Agent:
     """Agent that can interact with environment from pettingzoo"""
 
-    def __init__(self, obs_dim, act_dim, global_obs_dim, actor_lr, critic_lr):
+    def __init__(self, actor, critic, actor_optimizer, critic_optimizer):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.actor = MLPNetwork(obs_dim, act_dim).to(self.device)
-        # critic input all the observations and actions
-        # if there are 3 agents for example, the input for critic is (obs1, obs2, obs3, act1, act2, act3)
-        self.critic = MLPNetwork(global_obs_dim, 1).to(self.device)
-        self.actor_optimizer = Adam(self.actor.parameters(), lr=actor_lr)
-        self.critic_optimizer = Adam(self.critic.parameters(), lr=critic_lr)
-        self.target_actor = deepcopy(self.actor).to(self.device)
-        self.target_critic = deepcopy(self.critic).to(self.device)
-        self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
+        self.actor = actor
+        self.critic = critic
+        self.actor_optimizer = actor_optimizer
+        self.critic_optimizer = critic_optimizer
+        self.target_actor = deepcopy(actor)
+        self.target_critic = deepcopy(critic)
         
 
     @staticmethod
@@ -42,18 +38,12 @@ class Agent:
         if not agent_status:
             # Apply masking: setting logits of invalid actions to a large negative value
             logits[:, 0] = -1e10  # Assuming the invalid action corresponds to index 0
+            
         # action = self.gumbel_softmax(logits)
         # action = F.gumbel_softmax(logits, hard=True)
         
         # Use tanh activation to ensure the action is in the range [-1, 1]
-        action_continuous = torch.tanh(logits)
-        # Convert action values to tensor
-        action_values_tensor = torch.tensor(self.action_values, device=self.device, dtype=action_continuous.dtype)
-
-        # Find the closest discrete action value
-        action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
-        action = action_values_tensor[action_indices]
-        
+        action = torch.tanh(logits)
         if model_out:
             return action, logits
         return action
@@ -68,16 +58,9 @@ class Agent:
             # Apply masking: setting logits of invalid actions to a large negative value
             logits[:, 0] = -1e10  # Assuming the invalid action corresponds to index 0
             
-        action_continuous = torch.tanh(logits)
-        # Convert action values to tensor
-        action_values_tensor = torch.tensor(self.action_values, device=self.device, dtype=action_continuous.dtype)
-
-        # Find the closest discrete action value
-        action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
-        action = action_values_tensor[action_indices]
         # action = self.gumbel_softmax(logits)
         # action = F.gumbel_softmax(logits, hard=True)
-        # action = torch.tanh(logits)
+        action = torch.tanh(logits)
         return action.squeeze(0).detach()
 
     def critic_value(self, state_list: List[Tensor], act_list: List[Tensor]):

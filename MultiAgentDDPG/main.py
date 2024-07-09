@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, timedelta
 from MADDPG import MADDPG
 from logger_config import configured_logger as logger
 from maddpg_parameter import parse_args, get_env
@@ -13,15 +13,15 @@ from tqdm import tqdm
 
 # Define the start and end date of the EV request data
 start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-07-02'
+end_date = END_DATE = '2018-09-02'
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = datetime(2018, 7, 1)
 end_time = END_TIME = datetime(2018, 7, 2)
 
 # Define the number of agents
-num_agents = NUM_AGENTS = 10
-parking_data_path = PARKING_DATA_PATH = '../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31.csv'
+num_agents = NUM_AGENTS = 20
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{num_agents}.csv'
 
 
 if __name__ == '__main__':
@@ -62,7 +62,9 @@ if __name__ == '__main__':
         }  
         
         while env.timestamp <= env.end_time:  
-            
+            if env.timestamp.hour < 7 or env.timestamp.hour > 23:
+                env.timestamp += timedelta(hours=1)
+                continue
             # add EVs to the environment, if there are EVs that have arrived at the current time
             current_requests = ev_request_dict.get(env.timestamp, []) # get the EVs that have arrived at the current time
             if current_requests:

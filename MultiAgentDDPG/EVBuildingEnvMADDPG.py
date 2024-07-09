@@ -4,11 +4,12 @@ from datetime import datetime, timedelta
 from logger_config import configured_logger as logger
 from EVChargingEnv import EVChargingEnv
 from collections import defaultdict
+from gym.spaces import Box, Discrete
 from utils import min_max_scaling, standardize
 
 building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
-alpha = ALPHA = 0.7
-beta = BETA = 0.05
+alpha = ALPHA = 0.5
+beta = BETA = 0.3
 
 class ActionSpace:
     """Define the action space for each agent in the environment"""
@@ -23,6 +24,20 @@ class ActionSpace:
     
     def size(self):
         return self.shape[0]
+    
+class DiscreteActionSpace:
+    """Define the action space for each agent in the environment"""
+    
+    def __init__(self, action_values):
+        self.action_values = np.array(action_values)
+        self.n = 1  # Define the number of actions
+
+    def sample(self):
+        sample = np.random.choice(self.action_values)
+        return sample
+    
+    def size(self):
+        return self.n
     
 
 class EVBuildingEnv(EVChargingEnv):
@@ -44,9 +59,13 @@ class EVBuildingEnv(EVChargingEnv):
         # Initialize the observation space and action space for each agent
         self.agents = [f'agent_{i}' for i in range(num_agents)]
         self.agents_status = {f'agent_{i}': False for i in range(num_agents)}
-        self.observation_spaces = {f'agent_{i}': np.zeros(6) for i in range(num_agents)} # SoC, building load, P_max_tk, P_min_tk
+        self.observation_spaces = {f'agent_{i}': np.zeros(8) for i in range(num_agents)} # SoC, building load, P_max_tk, P_min_tk
+        # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = {f'agent_{i}': ActionSpace(-1, 1, (1,)) for i in range(num_agents)}  
+        # self.action_spaces = {f'agent_{i}': DiscreteActionSpace(self.action_values) for i in range(num_agents)}  
+        
         self.dones = {f'station_{i}': False for i in range(num_agents)}
+        self.inactive_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
         
         # Calculate the average of the top 10% of historical peak electricity consumption
         sorted_load_history = self.building_load['Total_Power(kWh)'].sort_values(ascending=False)
@@ -104,14 +123,14 @@ class EVBuildingEnv(EVChargingEnv):
         
         # If the current time is the start time, return the initial state
         if current_time == self.start_time or self.agents_status[agent_id] == False:
-            return np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
+            return self.inactive_observation
     
         # Get the current SoC
         soc = round(self.ev_data[agent_id]['soc'], 2)
         
         # Get the normalized difference between the building load and the average of the top 10% of historical peak electricity consumption
         building_load = self.building_load[self.building_load['Date'] == current_time]['Total_Power(kWh)'].values[0]
-        load_diff = building_load - self.average_top_10_percent
+        load_diff = building_load - self.curr_mean 
         normalized_load_diff = min_max_scaling(load_diff, self.min_load_diff, self.max_load_diff)
         
         # Get the maximum and minimum SoC based on the current time
@@ -127,8 +146,8 @@ class EVBuildingEnv(EVChargingEnv):
         current_price = self.tou_price_in_weekday[current_time.hour] if current_time.weekday() < 5 else self.tou_price_in_weekend[current_time.hour]
             
         # Return the state information
-        return np.array([soc, normalized_load_diff, normalized_P_max_tk, normalized_P_min_tk, emergency, current_price], dtype=np.float32)
-    
+        # return np.array([soc, normalized_load_diff, normalized_P_max_tk, normalized_P_min_tk, emergency, current_price], dtype=np.float32)
+        return np.array([soc, normalized_load_diff, normalized_P_max_tk, normalized_P_min_tk, current_price, emergency, self.timestamp.hour, self.timestamp.weekday()], dtype=np.float32)
     
     """reset the environment to the initial state"""
     def reset(self):
@@ -148,8 +167,12 @@ class EVBuildingEnv(EVChargingEnv):
         # Initialize the observation space and action space for each agent
         self.agents = [f'agent_{i}' for i in range(self.num_agents)]
         self.agents_status = {f'agent_{i}': False for i in range(self.num_agents)}
-        self.observation_spaces = {f'agent_{i}': np.zeros(6) for i in range(self.num_agents)} # SoC, building load, P_max_tk, P_min_tk
+        self.observation_spaces = {f'agent_{i}': np.zeros(8) for i in range(self.num_agents)} # SoC, building load, P_max_tk, P_min_tk
+        
+        # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = {f'agent_{i}': ActionSpace(-1, 1, (1,)) for i in range(self.num_agents)}  
+        # self.action_spaces = {f'agent_{i}': DiscreteActionSpace(self.action_values) for i in range(self.num_agents)}  
+        
         self.dones = {f'station_{i}': False for i in range(self.num_agents)}
         
         self.current_parking = np.zeros(self.num_agents, dtype=bool)  # Whether the charging pile is connected
@@ -203,18 +226,20 @@ class EVBuildingEnv(EVChargingEnv):
         rewards = {agent_id: 0 for agent_id in self.agents}
         current_price = self.tou_price_in_weekday[self.timestamp.hour] if self.timestamp.weekday() < 5 \
             else self.tou_price_in_weekend[self.timestamp.hour]
-        
-        for agent_id in self.agents:
-            if self.agents_status[agent_id]:
-                P_tk = P_tk_dict[agent_id]
-                r_tk = -P_tk * current_price
-                r_soc = -np.exp(abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))) ** 2
-                new_load = original_load + P_tk_dict[agent_id]
-                load_deviation = abs(new_load - self.curr_mean)
-                r_balance = -load_deviation / self.curr_std
-                # rewards[agent_id] = alpha * r_tk + (1 - alpha) * r_soc + r_balance * beta
-                rewards[agent_id] = r_balance
 
+        total_action_impact = sum(P_tk_dict.values())
+        if total_action_impact * (original_load - self.curr_mean) < 0:
+            for agent_id in self.agents:
+                if self.agents_status[agent_id]:
+                    rewards[agent_id] = float("-inf")
+        else:
+            for agent_id in self.agents:
+                if self.agents_status[agent_id]:
+                    P_tk = P_tk_dict[agent_id]
+                    r_tk = -P_tk * current_price
+                    r_soc = -np.exp(abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp)))
+                    rewards[agent_id] = alpha * r_soc + (1-alpha) * (-1/1+np.exp(-r_tk))
+ 
         return rewards
 
 
@@ -245,6 +270,12 @@ class EVBuildingEnv(EVChargingEnv):
                 
                 action = actions[agent_id]
                 P_max_tk, P_min_tk, SoC_lower_bound, SoC_upper_bound = self.get_deb_constraints(agent_id, current_time + timedelta(hours=1))
+
+                # if self.original_load > self.curr_mean:
+                #     P_max_tk = 0
+                # elif self.original_load < self.curr_mean:
+                #     P_min_tk = 0
+                
                 P_tk = (action + 1) / 2 * (P_max_tk - P_min_tk) + P_min_tk # Calculate the power output based on the action
                 soc = (self.ev_data[agent_id]['soc'] * self.C_k + P_tk * (time_interval / 60)) / self.C_k 
                 self.ev_data[agent_id]['soc'] = soc
