@@ -258,13 +258,13 @@ class EVBuildingEnv(EVChargingEnv):
         for agent_id in self.agents:
             if self.agents_status[agent_id]:
                 P_tk = P_tk_dict[agent_id]
-                # r_tk = -P_tk * current_price
+                r_tk = -P_tk * current_price
                 # r_soc = -abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
                 if P_tk * (original_load - self.curr_mean) > 0:
-                    r_tk = 1
+                    l_tk = 1
                 else:
-                    r_tk = -1
-                rewards[agent_id] = r_tk
+                    l_tk = -1
+                rewards[agent_id] = l_tk + 1/1+np.exp(-r_tk)
         
         return rewards
 
