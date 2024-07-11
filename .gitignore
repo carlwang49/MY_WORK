@@ -5,6 +5,7 @@
 .DS_Store
 __pycache__/
 *.json
-Data/
+Dataset/
 log/
 data_plot/
+saved_models/
