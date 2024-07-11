@@ -6,7 +6,7 @@ import warnings
 warnings.filterwarnings('ignore')
 from scipy.optimize import linprog
 from logger_config import configured_logger as logger
-from utils import create_result_dir, get_num_of_evs_in_each_hours, get_tou_price
+from utils import create_result_dir, get_num_of_evs_in_each_hours, get_tou_price, get_rtp_price
 
 # 設定 contract_capacity 和 capacity_price
 contract_capacity = 500
@@ -14,11 +14,11 @@ capacity_price = 15
 
 # Define the start and end date of the EV request data
 start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-09-30'
+end_date = END_DATE = '2018-10-01'
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 9, 30)
+end_time = END_TIME = datetime(2018, 10, 1)
 
 num_agents = NUM_AGENTS = 10
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
@@ -75,10 +75,12 @@ if __name__ == '__main__':
     total_action_impact = defaultdict(float)
     
     # Create a directory for storing results of the simulation
-    result_dir = create_result_dir('DayAheadSchedule')
+    result_dir = create_result_dir(f'DayAheadSchedule_agent{NUM_AGENTS}')
+    
+    real_time_price = get_rtp_price(start_time, end_time)
     
     current_time = start_time  
-    while current_time <= end_time:
+    while current_time < end_time:
         
         number_of_ev_in_hours = get_num_of_evs_in_each_hours(day_ahead_schedule_df, current_time)
         
@@ -90,7 +92,7 @@ if __name__ == '__main__':
             initial_soc, final_soc = ev_request['initial_soc'], ev_request['departure_soc']
             arrival_time, departure_time = ev_request['arrival_time'].hour, ev_request['departure_time'].hour
             num_intervals = departure_time - arrival_time
-
+            print(num_intervals)
             # Calculate the maximum and minimum charging power
             max_powers = [max_charging_power / number_of_ev_in_hours[hour] for hour in range(arrival_time, departure_time)]
             min_powers = [max_discharging_power / number_of_ev_in_hours[hour] for hour in range(arrival_time, departure_time)]
@@ -103,8 +105,10 @@ if __name__ == '__main__':
 
             # Calculate the time intervals
             time_intervals = list(range(arrival_time, departure_time))
-            tou_price = get_tou_price(current_time)
-            relevant_prices = tou_price[arrival_time:departure_time]
+            # tou_price = get_tou_price(current_time)
+            # relevant_prices = tou_price[arrival_time:departure_time]
+            tou_price = real_time_price[(real_time_price['datetime'] >= ev_request['arrival_time']) & (real_time_price['datetime'] < ev_request['departure_time'])]
+            relevant_prices = tou_price['average_price'].values
             
             # Define the linear programming problem
             c = np.concatenate((relevant_prices, -np.array(relevant_prices)))
@@ -200,23 +204,30 @@ if __name__ == '__main__':
                         'charging_power': (final_soc - initial_soc) * c_k, 
                         'charging_time': num_intervals
                     })
-            
-            current_time += timedelta(days=1)
+        current_time += timedelta(days=1)
 
     soc_history.to_csv(f'../Result/{result_dir}/soc_history.csv', index=False)
     charging_records.to_csv(f'../Result/{result_dir}/charging_records.csv', index=False)
-
-    for key, value in total_action_impact.items():
-        if key > end_time:
-            break
-        original_load = building_load.loc[building_load['Date'] == key, 'Total_Power(kWh)'].values[0]
-        load_history.loc[len(load_history)] = ({
-            'current_time': key,
-            'original_load': original_load,
-            'total_load': original_load + value,
-            'total_action_impact': value
-        })
-
+    
+    current_time = start_time
+    while current_time <= end_time:
+        original_load = building_load.loc[building_load['Date'] == current_time, 'Total_Power(kWh)'].values[0]
+        if total_action_impact.get(current_time):
+            load_history.loc[len(load_history)] = ({
+                'current_time': current_time,
+                'original_load': original_load,
+                'total_load': original_load + total_action_impact[current_time],
+                'total_action_impact': total_action_impact[current_time]
+            })
+        else:
+            load_history.loc[len(load_history)] = ({
+                'current_time': current_time,
+                'original_load': original_load,
+                'total_load': original_load,
+                'total_action_impact': 0
+            })
+        current_time += timedelta(hours=1)
+        
     # save load history
     # Sort the DataFrame by current_time
     load_history = load_history.sort_values(by='current_time')

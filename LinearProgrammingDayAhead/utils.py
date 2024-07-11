@@ -88,3 +88,26 @@ def get_tou_price(current_time: datetime):
     else:
         tou_price = [0.056] * 24      
     return tou_price
+
+def get_rtp_price(start_time, end_time):
+    # 读取实时价格数据
+    real_time_price = pd.read_csv('../Dataset/RTP/electricity_prices_from_201807010000_to_201812312359.csv')
+    real_time_price['datetime'] = pd.to_datetime(real_time_price['datetime'])
+    
+    # 筛选所需时间范围的数据
+    real_time_price = real_time_price[(real_time_price['datetime'] >= start_time) & (real_time_price['datetime'] < end_time + timedelta(hours=1))].copy()
+    real_time_price.sort_values(by='datetime', inplace=True)
+    
+    # 创建完整的时间序列索引
+    full_time_index = pd.date_range(start=start_time, end=end_time, freq='H')
+    
+    # 将数据框设置为时间索引
+    real_time_price.set_index('datetime', inplace=True)
+    
+    # 使用完整的时间索引重新索引数据框，并使用前向填充方法填充缺失值
+    real_time_price = real_time_price.reindex(full_time_index).ffill().reset_index()
+    
+    # 重命名列
+    real_time_price.rename(columns={'index': 'datetime'}, inplace=True)
+    
+    return real_time_price
