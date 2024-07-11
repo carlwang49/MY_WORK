@@ -42,6 +42,7 @@ class Agent:
         if not agent_status:
             # Apply masking: setting logits of invalid actions to a large negative value
             logits[:, 0] = -1e10  # Assuming the invalid action corresponds to index 0
+        
         # action = self.gumbel_softmax(logits)
         # action = F.gumbel_softmax(logits, hard=True)
         
@@ -53,12 +54,14 @@ class Agent:
         # Find the closest discrete action value
         action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
         action = action_values_tensor[action_indices]
+        
         # action = torch.tanh(logits)
         if model_out:
             return action, logits
         return action
 
     def target_action(self, obs, agent_status):
+        """select action for all agents using their target actor network"""
         # when calculate target critic value in MADDPG,
         # we use target actor to get next action given next states,
         # which is sampled from replay buffer with size torch.Size([batch_size, state_dim])
@@ -81,20 +84,24 @@ class Agent:
         return action.squeeze(0).detach()
 
     def critic_value(self, state_list: List[Tensor], act_list: List[Tensor]):
+        """calculate the value of the critic network for a given state and action"""
         x = torch.cat(state_list + act_list, 1)
         return self.critic(x).squeeze(1)  # tensor with a given length
 
     def target_critic_value(self, state_list: List[Tensor], act_list: List[Tensor]):
+        """calculate the value of the target critic network for a given state and action"""
         x = torch.cat(state_list + act_list, 1)
         return self.target_critic(x).squeeze(1)  # tensor with a given length
 
     def update_actor(self, loss):
+        """update actor network using the loss"""
         self.actor_optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 0.5)
         self.actor_optimizer.step()
 
     def update_critic(self, loss):
+        """update critic network using the loss"""
         self.critic_optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 0.5)

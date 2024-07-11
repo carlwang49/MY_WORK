@@ -29,21 +29,26 @@ class MADDPG:
     """A MADDPG(Multi Agent Deep Deterministic Policy Gradient) agent"""
 
     def __init__(self, dim_info, capacity, batch_size, actor_lr, critic_lr, res_dir):
+        
         # sum all the dims of each agent to get input dim for critic
         global_obs_act_dim = sum(sum(val) for val in dim_info.values())
+        
         # create Agent(actor-critic) and replay buffer for each agent
         self.agents = {}
         self.buffers = {}
+        
+        # dim_info is a dict with agent_id as key and (obs_dim, act_dim) as value
         for agent_id, (obs_dim, act_dim) in dim_info.items():
             self.agents[agent_id] = Agent(obs_dim, act_dim, global_obs_act_dim, actor_lr, critic_lr)
             self.buffers[agent_id] = Buffer(capacity, obs_dim, act_dim, 'cuda')
+        
         self.dim_info = dim_info
-
         self.batch_size = batch_size
         self.res_dir = res_dir  # directory to save the training result
         self.logger = setup_logger(os.path.join(res_dir, 'maddpg.log'))
 
     def add(self, obs, action, reward, next_obs, done):
+        """add experience to the buffer of each agent"""
         # NOTE that the experience is a dict with agent name as its key
         for agent_id in obs.keys():
             o = obs[agent_id]
@@ -52,10 +57,11 @@ class MADDPG:
                 # the action from env.action_space.sample() is int, we have to convert it to onehot
                 a = np.eye(self.dim_info[agent_id][1])[a]
 
+            # the reward and done are also dict with agent name as key
             r = reward[agent_id]
             next_o = next_obs[agent_id]
             d = done[agent_id]
-            self.buffers[agent_id].add(o, a, r, next_o, d)
+            self.buffers[agent_id].add(o, a, r, next_o, d) # add experience to the buffer of each agent
 
     def sample(self, batch_size, agents_status):
         """sample experience from all the agents' buffers, and collect data for network input"""
@@ -67,6 +73,7 @@ class MADDPG:
         # but only the reward and done of the current agent is needed in the calculation
         obs, act, reward, next_obs, done, next_act = {}, {}, {}, {}, {}, {}
         for agent_id, buffer in self.buffers.items():
+            # sample experience from the buffer
             o, a, r, n_o, d = buffer.sample(indices)
             obs[agent_id] = o
             act[agent_id] = a
@@ -79,6 +86,7 @@ class MADDPG:
         return obs, act, reward, next_obs, done, next_act
 
     def select_action(self, obs, agents_status):
+        """select action for all agents using their actor network"""
         actions = {}
         for agent, o in obs.items():
             o = torch.from_numpy(o).unsqueeze(0).float()
@@ -90,6 +98,7 @@ class MADDPG:
         return actions
 
     def learn(self, batch_size, gamma, agents_status):
+        """learn from the replay buffer of all agents"""
         for agent_id, agent in self.agents.items():
             obs, act, reward, next_obs, done, next_act = self.sample(batch_size, agents_status)
 
@@ -99,10 +108,13 @@ class MADDPG:
             # calculate target critic value
             next_target_critic_value = agent.target_critic_value(list(next_obs.values()),
                                                                  list(next_act.values()))
+            
+            # calculate target value
             target_value = reward[agent_id] + gamma * next_target_critic_value * (1 - done[agent_id])
 
+            # calculate critic loss
             critic_loss = F.mse_loss(critic_value, target_value.detach(), reduction='mean')
-            agent.update_critic(critic_loss)
+            agent.update_critic(critic_loss) # update critic
 
             # update actor
             # action of the current agent is calculated using its actor
@@ -110,7 +122,7 @@ class MADDPG:
             act[agent_id] = action
             actor_loss = -agent.critic_value(list(obs.values()), list(act.values())).mean()
             actor_loss_pse = torch.pow(logits, 2).mean()
-            agent.update_actor(actor_loss + 1e-3 * actor_loss_pse)
+            agent.update_actor(actor_loss + 1e-3 * actor_loss_pse) # update actor
             self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
 
     def update_target(self, tau):

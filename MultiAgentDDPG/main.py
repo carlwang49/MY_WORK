@@ -9,20 +9,27 @@ from maddpg_parameter import parse_args, get_env
 from utils import prepare_ev_request_data, create_result_dir, get_running_reward, prepare_ev_departure_data
 from tqdm import tqdm
 
-# TODO: 合併 start_time, start_date, end_time, end_date
+# Define the start and end datetime of the EV request data
+start_datetime = datetime(2018, 7, 1)
+end_datetime = datetime(2018, 10, 1)
 
 # Define the start and end date of the EV request data
-start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-09-30'
+start_date = START_DATE = str(start_datetime.date())
+end_date = END_DATE = str(end_datetime.date())
 
 # Define the start and end time of the EV request data
-start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 9, 30)
+start_time = START_TIME = start_datetime
+end_time = END_TIME = end_datetime
 
 # Define the number of agents
-num_agents = NUM_AGENTS = 30 
-parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{num_agents}.csv'
+num_agents = NUM_AGENTS = 10
 
+# Define the path to the EV request data
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
+
+# Define the directory name to save the result
+dir_name = DIR_NAME = 'GB-MARL-Discrete'
+# dir_name = DIR_NAME = 'testing'
 
 if __name__ == '__main__':
     
@@ -33,12 +40,14 @@ if __name__ == '__main__':
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
     ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
     
-    # create a new folder to save the result
-    result_dir = create_result_dir('GB-MARL-Discrete') 
-    
     # create environment
-    env, dim_info = get_env(num_agents, start_time, end_time) 
-    maddpg = MADDPG(dim_info, args.buffer_capacity, args.batch_size, args.actor_lr, args.critic_lr, result_dir) # create MADDPG agent
+    env, dim_info = get_env(num_agents, start_time, end_time)
+
+    # create a new folder to save the result
+    result_dir = create_result_dir(f'{DIR_NAME}_{START_DATE}_{END_DATE}_{NUM_AGENTS}') 
+    
+    # create MADDPG agent
+    maddpg = MADDPG(dim_info, args.buffer_capacity, args.batch_size, args.actor_lr, args.critic_lr, result_dir) 
 
     step = 0  # global step counter
     agent_num = env.num_agents # number of agents
@@ -63,31 +72,29 @@ if __name__ == '__main__':
         
         while env.timestamp <= env.end_time:  
             
-            # if the current time is between 7:00 and 23:00, continue
+            # skip the time
             if env.timestamp.hour < 7 or env.timestamp.hour > 23:
                 env.timestamp += timedelta(hours=1)
                 continue
             
             # add EVs to the environment, if there are EVs that have arrived at the current time
             current_requests = ev_request_dict.get(env.timestamp, []) # get the EVs that have arrived at the current time
-            if current_requests:
-                for ev in current_requests:
-                    env.add_ev(ev['requestID'], 
-                               ev['arrival_time'], 
-                               ev['departure_time'], 
-                               ev['initial_soc'], 
-                               ev['departure_soc'])
-                    
-                    env.current_parking_number += 1 # increase the number of EVs in the environment
+            for ev in current_requests:
+                env.add_ev(ev['requestID'], 
+                            ev['arrival_time'], 
+                            ev['departure_time'], 
+                            ev['initial_soc'], 
+                            ev['departure_soc'])
+                
+                env.current_parking_number += 1 # increase the number of EVs in the environment
                         
             # Remove EVs that departed at the current time
             current_departures = ev_departure_dict.get(env.timestamp, [])
-            if current_departures:
-                for ev in current_departures:
-                    for agent_id, data in env.ev_data.items():
-                        if ev['requestID'] == data['requestID']:
-                            env.remove_ev(agent_id)
-                            env.current_parking_number -= 1
+            for ev in current_departures:
+                for agent_id, data in env.ev_data.items():
+                    if ev['requestID'] == data['requestID']:
+                        env.remove_ev(agent_id)
+                        env.current_parking_number -= 1 # decrease the number of EVs in the environment
             
             # select action
             step += 1
@@ -102,8 +109,6 @@ if __name__ == '__main__':
                         action[agent_id] = -1 # set the action to -1
             else:
                 action = maddpg.select_action(obs, env.agents_status) # select action using MADDPG
-                print(env.agents_status)
-                print(action)
 
             # step the environment
             next_obs, reward, done, info = env.step(action, env.timestamp)
@@ -152,7 +157,7 @@ if __name__ == '__main__':
     ax.legend()
     ax.set_xlabel('episode')
     ax.set_ylabel('reward')
-    title = f'training result of maddpg solve EVBuildingEnv'
+    title = f'training result of GB-MARL-Discrete'
     ax.set_title(title)
     plt.savefig(os.path.join(result_dir, title))
 

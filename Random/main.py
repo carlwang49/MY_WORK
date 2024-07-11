@@ -6,17 +6,22 @@ from utils import prepare_ev_request_data, prepare_ev_departure_data, create_res
 import pandas as pd
 
 
-# TODO: 合併 start_time, start_date, end_time, end_date
+# Define the start and end datetime of the EV request data
+start_datetime = datetime(2018, 7, 1)
+end_datetime = datetime(2018, 9, 30)
 
 # Define the start and end date of the EV request data
-start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-09-30'
+start_date = START_DATE = start_datetime.date()
+end_date = END_DATE = end_datetime.date()
 
 # Define the start and end time of the EV request data
-start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 9, 30)
+start_time = START_TIME = start_datetime
+end_time = END_TIME = end_datetime
 
+# Define the number of agents
 num_agents = NUM_AGENTS = 10
+
+# Define the path to the EV request data
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 
@@ -34,31 +39,33 @@ if __name__ == '__main__':
     # Set random seed for reproducibility and create an EV charging environment
     env = EVChargingEnv(num_agents, start_time, end_time)
     current_time = start_time  
+    
+    # Run the simulation
     while current_time <= end_time:
         
+        # Skip the time 
         if current_time.hour < 7 or current_time.hour > 23:
             current_time += timedelta(hours=1)
             continue
         
         current_requests = ev_request_dict.get(current_time, [])
+        
         # Add EVs that arrived at the current time
-        if current_requests:
-            for ev in current_requests:
-                env.add_ev(ev['requestID'], 
-                            ev['arrival_time'], 
-                            ev['departure_time'], 
-                            ev['initial_soc'], 
-                            ev['departure_soc'])
-                
-                env.current_parking_number += 1 # increase the number of EVs in the environment
+        for ev in current_requests:
+            env.add_ev(ev['requestID'], 
+                        ev['arrival_time'], 
+                        ev['departure_time'], 
+                        ev['initial_soc'], 
+                        ev['departure_soc'])
+            env.current_parking_number += 1 # increase the number of EVs in the environment
 
         current_departures = ev_departure_dict.get(current_time, [])
+        
         # Remove EVs that departed at the current time
-        if current_departures:
-            for ev in current_departures:
-                agent_idx = np.where([ev['requestID'] == data['requestID'] for data in env.ev_data])[0][0]
-                env.remove_ev(agent_idx)
-                env.current_parking_number -= 1
+        for ev in current_departures:
+            agent_idx = np.where([ev['requestID'] == data['requestID'] for data in env.ev_data])[0][0]
+            env.remove_ev(agent_idx)
+            env.current_parking_number -= 1 # decrease the number of EVs in the environment
                 
         # Update the SoC of each connected EV
         total_action = 0
