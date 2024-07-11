@@ -151,7 +151,8 @@ class EVBuildingEnv(EVChargingEnv):
         
         # Get the current electricity price
         # current_price = self.tou_price_in_weekday[current_time.hour] if current_time.weekday() < 5 else self.tou_price_in_weekend[current_time.hour]
-        current_price = self.real_time_price[self.real_time_price['datetime'] == current_time]['average_price'].values[0]
+        current_price_series = self.real_time_price[self.real_time_price['datetime'] == current_time]['average_price']
+        current_price = current_price_series.values[0] if not current_price_series.empty else self.default_price
             
         # Return the state information
         # return np.array([soc, normalized_load_diff, normalized_P_max_tk, normalized_P_min_tk, emergency, current_price], dtype=np.float32)
