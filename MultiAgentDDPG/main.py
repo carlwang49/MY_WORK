@@ -13,14 +13,14 @@ from tqdm import tqdm
 
 # Define the start and end date of the EV request data
 start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-09-30'
+end_date = END_DATE = '2018-07-31'
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 9, 30)
+end_time = END_TIME = datetime(2018, 7, 31)
 
 # Define the number of agents
-num_agents = NUM_AGENTS = 20 
+num_agents = NUM_AGENTS = 10 
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{num_agents}.csv'
 
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
     
     # create a new folder to save the result
-    result_dir = create_result_dir('TEST') 
+    result_dir = create_result_dir('GB-MARL') 
     
     # create environment
     env, dim_info = get_env(num_agents, start_time, end_time) 
@@ -62,9 +62,11 @@ if __name__ == '__main__':
         }  
         
         while env.timestamp <= env.end_time:  
+            
             if env.timestamp.hour < 7 or env.timestamp.hour > 23:
                 env.timestamp += timedelta(hours=1)
                 continue
+            
             # add EVs to the environment, if there are EVs that have arrived at the current time
             current_requests = ev_request_dict.get(env.timestamp, []) # get the EVs that have arrived at the current time
             if current_requests:

@@ -3,9 +3,6 @@ import pandas as pd
 from datetime import datetime, timedelta
 from logger_config import configured_logger as logger
 
-
-building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
-
 class EVChargingEnv:
     def __init__(self, num_agents, start_time, end_time):  
         self.num_agents = num_agents
@@ -26,15 +23,6 @@ class EVChargingEnv:
         self.eta = 0.95  # Charging efficiency
         self.soc_max = 0.8  # Maximum SoC
         self.soc_min = 0.2  # Minimum SoC
-        
-        
-        # Initialize building load
-        self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
-        self.building_load = self.set_building_time_range(start_time, end_time)
-        self.original_load = None
-        
-        # Store the building load history
-        self.load_history = [] 
 
         # Initialize EV data for each charging pile
         self.ev_data = [{'requestID': None, 
@@ -147,12 +135,6 @@ class EVChargingEnv:
         else:
             logger.bind(console=True).warning(f"Charging pile {agent_idx} is not connected.")
             return None
-        
-    """set the building load time range for the environment"""
-    def set_building_time_range(self, start_time: datetime, end_time: datetime):
-        building_load = self.building_load[(self.building_load['Date'] >= start_time) & (self.building_load['Date'] <= end_time)].copy()
-        building_load.sort_values(by='Date', inplace=True)
-        return building_load
     
     
     """Get the current parking status and EV data for each charging pile."""
@@ -189,13 +171,6 @@ class EVChargingEnv:
         self.current_parking_number = 0
         self.timestamp = self.start_time
         
-        # Initialize the environment
-        self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
-        self.building_load = self.set_building_time_range(self.start_time, self.end_time)
-        self.original_load = None
-        
-        self.load_history = [] 
-        
         # Reset the charging records and SoC history
         self.charging_records = pd.DataFrame(columns=['requestID', 
                                                       'arrival_time', 
@@ -219,10 +194,6 @@ class EVChargingEnv:
     """Update the SoC of a specific charging pile."""
     def step(self, agent_idx, action: float, current_time: datetime, SoC_lower_bound, SoC_upper_bound, time_interval: int = 60):
         
-        
-        # Get the original building load
-        self.original_load = self.building_load[self.building_load['Date'] == current_time]['Total_Power(kWh)'].values[0].copy() 
-        
         # Record the SoC history
         self.soc_history.loc[len(self.soc_history)] = ({
             'requestID': self.ev_data[agent_idx]['requestID'],  # Add 'requestID' to the soc_history DataFrame
@@ -231,12 +202,12 @@ class EVChargingEnv:
             'SoC_upper_bound': self.SoC_upper_bound_list[agent_idx], # Add the upper bound of SoC to the soc_history DataFrame
             'SoC_lower_bound': self.SoC_lower_bound_list[agent_idx]  # Add the lower bound of SoC to the soc_history DataFrame
         })
-        
+
         # Update the SoC of the charging pile
         self.ev_data[agent_idx]['soc'] = (self.ev_data[agent_idx]['soc'] * self.C_k + action * (time_interval / 60)) / self.C_k  # Update SoC
         self.ev_data[agent_idx]['soc'] = np.clip(self.ev_data[agent_idx]['soc'], self.soc_min, self.soc_max)  # Ensure SoC is within a reasonable range
         self.SoC_lower_bound_list[agent_idx], self.SoC_upper_bound_list[agent_idx] = SoC_lower_bound, SoC_upper_bound
-        
+
 
     """Get the SoC of a specific charging pile."""
     def get_soc(self, agent_idx):
