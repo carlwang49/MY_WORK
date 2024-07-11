@@ -34,7 +34,7 @@ if __name__ == '__main__':
     ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
     
     # create a new folder to save the result
-    result_dir = create_result_dir('GB-MARL') 
+    result_dir = create_result_dir('GB-MARL-Discrete') 
     
     # create environment
     env, dim_info = get_env(num_agents, start_time, end_time) 
@@ -63,6 +63,7 @@ if __name__ == '__main__':
         
         while env.timestamp <= env.end_time:  
             
+            # if the current time is between 7:00 and 23:00, continue
             if env.timestamp.hour < 7 or env.timestamp.hour > 23:
                 env.timestamp += timedelta(hours=1)
                 continue
@@ -101,6 +102,8 @@ if __name__ == '__main__':
                         action[agent_id] = -1 # set the action to -1
             else:
                 action = maddpg.select_action(obs, env.agents_status) # select action using MADDPG
+                print(env.agents_status)
+                print(action)
 
             # step the environment
             next_obs, reward, done, info = env.step(action, env.timestamp)

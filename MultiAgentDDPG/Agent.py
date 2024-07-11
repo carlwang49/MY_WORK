@@ -46,14 +46,14 @@ class Agent:
         # action = F.gumbel_softmax(logits, hard=True)
         
         # Use tanh activation to ensure the action is in the range [-1, 1]
-        # action_continuous = torch.tanh(logits)
+        action_continuous = torch.tanh(logits)
         # Convert action values to tensor
-        # action_values_tensor = torch.tensor(self.action_values, device=self.device, dtype=action_continuous.dtype)
+        action_values_tensor = torch.tensor(self.action_values, device=self.device, dtype=action_continuous.dtype)
 
         # Find the closest discrete action value
-        # action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
-        # action = action_values_tensor[action_indices]
-        action = torch.tanh(logits)
+        action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
+        action = action_values_tensor[action_indices]
+        # action = torch.tanh(logits)
         if model_out:
             return action, logits
         return action
@@ -68,16 +68,16 @@ class Agent:
             # Apply masking: setting logits of invalid actions to a large negative value
             logits[:, 0] = -1e10  # Assuming the invalid action corresponds to index 0
             
-        # action_continuous = torch.tanh(logits)
+        action_continuous = torch.tanh(logits)
         # Convert action values to tensor
-        # action_values_tensor = torch.tensor(self.action_values, device=self.device, dtype=action_continuous.dtype)
+        action_values_tensor = torch.tensor(self.action_values, device=self.device, dtype=action_continuous.dtype)
 
         # Find the closest discrete action value
-        # action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
-        # action = action_values_tensor[action_indices]
+        action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
+        action = action_values_tensor[action_indices]
         # action = self.gumbel_softmax(logits)
         # action = F.gumbel_softmax(logits, hard=True)
-        action = torch.tanh(logits)
+        # action = torch.tanh(logits)
         return action.squeeze(0).detach()
 
     def critic_value(self, state_list: List[Tensor], act_list: List[Tensor]):
