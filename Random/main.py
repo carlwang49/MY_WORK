@@ -8,11 +8,11 @@ import pandas as pd
 
 # Define the start and end datetime of the EV request data
 start_datetime = datetime(2018, 7, 1)
-end_datetime = datetime(2018, 9, 30)
+end_datetime = datetime(2018, 8, 1)
 
 # Define the start and end date of the EV request data
-start_date = START_DATE = start_datetime.date()
-end_date = END_DATE = end_datetime.date()
+start_date = START_DATE = str(start_datetime.date())
+end_date = END_DATE = str(end_datetime.date())
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = start_datetime
