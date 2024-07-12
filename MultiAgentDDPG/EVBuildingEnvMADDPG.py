@@ -8,8 +8,8 @@ from gym.spaces import Box, Discrete
 from utils import min_max_scaling, standardize
 
 building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
-alpha = ALPHA = 0.5
-beta = BETA = 0.3
+alpha = ALPHA = 0.3
+beta = BETA = 1
 
 class ActionSpace:
     """Define the action space for each agent in the environment"""
@@ -297,12 +297,9 @@ class EVBuildingEnv(EVChargingEnv):
             P_tk = P_tk_dict[agent_id]
             r_tk = -P_tk * current_price
             r_soc = -abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
-            rewards[agent_id] += (r_tk + r_soc) * (1-alpha)
-        
-            if P_tk_dict[agent_id] * (self.curr_mean - original_load) < 0:
-                r_global = 1 / (1 + np.exp(-abs(total_action_impact) / self.curr_mean))
-                rewards[agent_id] += (-r_global - 1) * alpha
-                
+            new_load = original_load + total_action_impact
+            rewards[agent_id] = (1-alpha) * r_tk - alpha * abs(new_load - self.curr_mean) - beta * r_soc
+
         return rewards
     
 

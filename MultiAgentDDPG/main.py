@@ -22,14 +22,14 @@ start_time = START_TIME = start_datetime
 end_time = END_TIME = end_datetime
 
 # Define the number of agents
-num_agents = NUM_AGENTS = 10
+num_agents = NUM_AGENTS = 30
 
 # Define the path to the EV request data
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
-dir_name = DIR_NAME = 'GB-MARL-Discrete'
-# dir_name = DIR_NAME = 'testing'
+# dir_name = DIR_NAME = 'GB-MARL-Discrete'
+dir_name = DIR_NAME = 'testing'
 
 if __name__ == '__main__':
     
