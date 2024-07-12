@@ -45,6 +45,7 @@ if __name__ == '__main__':
 
     # create a new folder to save the result
     result_dir = create_result_dir(f'{DIR_NAME}_{START_DATE}_{END_DATE}_{NUM_AGENTS}') 
+    # result_dir = create_result_dir(f'{DIR_NAME}') 
     
     # create MADDPG agent
     maddpg = MADDPG(dim_info, args.buffer_capacity, args.batch_size, args.actor_lr, args.critic_lr, result_dir) 

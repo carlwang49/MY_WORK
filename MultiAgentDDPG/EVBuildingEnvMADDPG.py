@@ -8,8 +8,8 @@ from gym.spaces import Box, Discrete
 from utils import min_max_scaling, standardize
 
 building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
-alpha = ALPHA = 0.5
-beta = BETA = 1
+alpha = ALPHA = 0.7
+beta = BETA = 0
 
 class ActionSpace:
     """Define the action space for each agent in the environment"""
@@ -318,7 +318,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.original_load = self.building_load[self.building_load['Date'] == current_time]['Total_Power(kWh)'].values[0].copy() 
         
         # Get the groups of EVs based on the current building load
-        # charge_group, discharge_group, hold_group = self.dynamic_greedy_grouping()
+        charge_group, discharge_group, hold_group = self.dynamic_greedy_grouping()
         
         active_agent_ids = [agent_id for agent_id, status in self.agents_status.items() if status]
         
@@ -335,12 +335,12 @@ class EVBuildingEnv(EVChargingEnv):
             action = actions[agent_id]
             P_max_tk, P_min_tk, SoC_lower_bound, SoC_upper_bound = self.get_deb_constraints(agent_id, current_time + timedelta(hours=1))
 
-            # if agent_id in charge_group:
-            #     P_min_tk = max(P_min_tk, 0)
-            # elif agent_id in discharge_group:
-            #     P_max_tk = min(P_max_tk, 0)
-            # elif agent_id in hold_group:
-            #     P_max_tk = P_min_tk = 0
+            if agent_id in charge_group:
+                P_min_tk = max(P_min_tk, 0)
+            elif agent_id in discharge_group:
+                P_max_tk = min(P_max_tk, 0)
+            elif agent_id in hold_group:
+                P_max_tk = P_min_tk = 0
             
             P_tk = (action + 1) / 2 * (P_max_tk - P_min_tk) + P_min_tk # Calculate the power output based on the action
             soc = (self.ev_data[agent_id]['soc'] * self.C_k + P_tk * (time_interval / 60)) / self.C_k 
