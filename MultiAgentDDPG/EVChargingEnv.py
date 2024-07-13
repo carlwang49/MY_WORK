@@ -19,7 +19,7 @@ class EVChargingEnv:
         # Define charging pile power constraints
         self.max_charging_power = 240  # kW
         self.max_discharging_power = -240  # kW
-        self.C_k = 60  # Battery capacity in kWh
+        self.C_k = 120  # Battery capacity in kWh
         self.eta = 0.95  # Charging efficiency
         self.soc_max = 0.8  # Maximum SoC
         self.soc_min = 0.2  # Minimum SoC

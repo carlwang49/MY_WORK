@@ -322,15 +322,15 @@ class EVBuildingEnv(EVChargingEnv):
         for agent_id in active_agent_ids:
             
             P_tk = P_tk_dict[agent_id]
-            r_tk = -P_tk * current_price
+            # r_tk = -P_tk * current_price
             
-            r_individual = 0
-            if P_tk * load_diff > 0:
-                r_individual = -np.log(1 + abs(P_tk))
-            else:
-                r_individual = -np.log(1 + abs(load_diff))
+            # r_individual = 0
+            # if P_tk * load_diff > 0:
+            #     r_individual = -np.log(1 + abs(P_tk))
+            # else:
+            #     r_individual = -np.log(1 + abs(load_diff))
                        
-            rewards[agent_id] = r_individual
+            rewards[agent_id] = -P_tk * np.log(1 + abs(original_load)) * 0.1
 
         return rewards
     
