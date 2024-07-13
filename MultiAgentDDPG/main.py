@@ -10,7 +10,7 @@ from utils import prepare_ev_request_data, create_result_dir, get_running_reward
 from tqdm import tqdm
 
 # Define the start and end datetime of the EV request data
-start_datetime = datetime(2018, 7, 1)
+start_datetime = datetime(2018, 7, 2)
 end_datetime = datetime(2018, 7, 3)
 
 # Define the start and end date of the EV request data
