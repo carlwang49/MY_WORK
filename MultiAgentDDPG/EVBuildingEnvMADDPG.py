@@ -321,7 +321,6 @@ class EVBuildingEnv(EVChargingEnv):
         
         # Get the groups of EVs based on the current building load
         charge_group, discharge_group, hold_group = self.dynamic_greedy_grouping(active_agent_ids)
-        print(f"charge_group: {charge_group}, discharge_group: {discharge_group}, hold_group: {hold_group}")
         
         for agent_id in active_agent_ids:
             # Record the SoC history
