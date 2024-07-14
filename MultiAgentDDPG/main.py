@@ -6,30 +6,36 @@ from datetime import datetime, timedelta
 from MADDPG import MADDPG
 from logger_config import configured_logger as logger
 from maddpg_parameter import parse_args, get_env
-from utils import prepare_ev_request_data, create_result_dir, get_running_reward, prepare_ev_departure_data
+from utils import prepare_ev_request_data, create_result_dir, prepare_ev_departure_data, plot_training_results
 from tqdm import tqdm
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Define the start and end datetime of the EV request data
-start_datetime = datetime(2018, 7, 2)
-end_datetime = datetime(2018, 7, 3)
+start_datetime = datetime(2018, 7, 1)
+end_datetime = datetime(2018, 10, 1)
 
 # Define the start and end date of the EV request data
 start_date = START_DATE = str(start_datetime.date())
 end_date = END_DATE = str(end_datetime.date())
+
+start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = start_datetime
 end_time = END_TIME = end_datetime
 
 # Define the number of agents
-num_agents = NUM_AGENTS = 10
+num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 
 # Define the path to the EV request data
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
 # dir_name = DIR_NAME = 'GB-MARL-Discrete'
-dir_name = DIR_NAME = 'testing'
+dir_name = DIR_NAME = 'GB-MARL'
 
 if __name__ == '__main__':
     
@@ -44,7 +50,7 @@ if __name__ == '__main__':
     env, dim_info = get_env(num_agents, start_time, end_time)
 
     # create a new folder to save the result
-    result_dir = create_result_dir(f'{DIR_NAME}_{START_DATE}_{END_DATE}_{NUM_AGENTS}') 
+    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}') 
     # result_dir = create_result_dir(f'{DIR_NAME}') 
     
     # create MADDPG agent
@@ -148,19 +154,7 @@ if __name__ == '__main__':
             logger.bind(console=True).info(message)
 
     maddpg.save(episode_rewards)  # save model
-
-    # training finishes, plot reward
-    fig, ax = plt.subplots()
-    x = range(1, args.episode_num + 1)
-    for agent_id, reward in episode_rewards.items():
-        ax.plot(x, reward, label=agent_id)
-        ax.plot(x, get_running_reward(reward))
-    ax.legend()
-    ax.set_xlabel('episode')
-    ax.set_ylabel('reward')
-    title = f'training result of GB-MARL-Discrete'
-    ax.set_title(title)
-    plt.savefig(os.path.join(result_dir, title))
+    plot_training_results(episode_rewards, args, result_dir)
 
     # save soc history and charging records
     soc_history_file = f'{result_dir}/soc_history.csv'
@@ -172,3 +166,6 @@ if __name__ == '__main__':
     load_history_df = pd.DataFrame(env.load_history)
     load_history_file = f'{result_dir}/building_loading_history.csv'
     load_history_df.to_csv(load_history_file, index=False)
+    
+    
+    

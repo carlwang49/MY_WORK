@@ -13,7 +13,7 @@ building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/Buildin
 Price_file_path = PRICE_FILE_PATH = '../Dataset/RTP/electricity_prices_from_201807010000_to_201812312359.csv'
 alpha = ALPHA = 0.7
 beta = BETA = 0.1
-gamma = GAMMA = 0.1
+gamma = GAMMA = 0.01
 max_load = MAX_LOAD = 1000  
 min_load = MIN_LOAD = 0
 
@@ -32,6 +32,9 @@ class EVBuildingEnv(EVChargingEnv):
         
         # Initialize PriceEnvironment
         self.price_env = PriceEnvironment(Price_file_path, start_time, end_time)
+        
+        # set contract capacity
+        self.contract_capacity = 800  
 
         # Initialize building load
         self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
@@ -39,7 +42,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.load_dict = self.building_load.set_index('Date')['Total_Power(kWh)'].to_dict()
         self.date_list = [pd.Timestamp(date).to_pydatetime() for date in self.building_load['Date'].values]
         self.original_load = self.get_current_load(start_time)
-        self.contract_capacity = 800  # 假設合約容量
+        
         self.daily_stats = {}
         self.precompute_daily_stats()
  
@@ -200,7 +203,6 @@ class EVBuildingEnv(EVChargingEnv):
         # emergency = float(emergency) / (self.ev_data[agent_id]['departure_time'].hour - self.ev_data[agent_id]['arrival_time'].hour)
         
         # Get the current electricity price
-        # current_price = self.tou_price_in_weekday[current_time.hour] if current_time.weekday() < 5 else self.tou_price_in_weekend[current_time.hour]
         current_price = self.price_env.get_current_price(current_time)
         
         past_avg_load, future_avg_load, past_avg_price, future_avg_price = self.calculate_load_and_price_trends(current_time)
@@ -208,9 +210,8 @@ class EVBuildingEnv(EVChargingEnv):
         state = [soc, normalized_P_max_tk, normalized_P_min_tk, 
                  normalized_load_diff, round(current_price, 2), 
                  emergency, round(past_avg_load, 2), round(future_avg_load, 2), round(past_avg_price, 2), round(future_avg_price, 2)]
-        print(state)
+        
         # Return the state information
-        # return np.array([soc, normalized_load_diff, normalized_P_max_tk, normalized_P_min_tk, emergency, current_price], dtype=np.float32)
         return np.array(state, dtype=np.float32)
     
     """reset the environment to the initial state"""
@@ -228,7 +229,6 @@ class EVBuildingEnv(EVChargingEnv):
         self.load_dict = self.building_load.set_index('Date')['Total_Power(kWh)'].to_dict()
         self.date_list = [pd.Timestamp(date).to_pydatetime() for date in self.building_load['Date'].values]
         self.original_load = self.get_current_load(self.start_time)
-        self.contract_capacity = 800  # 假設合約容量
         self.daily_stats = {}
         self.precompute_daily_stats()
  
@@ -319,6 +319,10 @@ class EVBuildingEnv(EVChargingEnv):
         self.original_load = self.get_current_load(current_time)
         active_agent_ids = [agent_id for agent_id, status in self.agents_status.items() if status]
         
+        # Get the groups of EVs based on the current building load
+        charge_group, discharge_group, hold_group = self.dynamic_greedy_grouping(active_agent_ids)
+        print(f"charge_group: {charge_group}, discharge_group: {discharge_group}, hold_group: {hold_group}")
+        
         for agent_id in active_agent_ids:
             # Record the SoC history
             self.soc_history.loc[len(self.soc_history)] = ({
@@ -331,6 +335,14 @@ class EVBuildingEnv(EVChargingEnv):
             
             action = actions[agent_id] # Get the action for the current agent
             P_max_tk, P_min_tk, SoC_lower_bound, SoC_upper_bound = self.get_deb_constraints(agent_id, current_time + timedelta(hours=1)) # Get the maximum and minimum power output
+            
+            if agent_id in charge_group:
+                P_min_tk = max(P_min_tk, 0)
+            elif agent_id in discharge_group:
+                P_max_tk = min(P_max_tk, 0)
+            elif agent_id in hold_group:
+                P_max_tk = P_min_tk = 0
+            
             P_tk = (action + 1) / 2 * (P_max_tk - P_min_tk) + P_min_tk # Calculate the power output based on the action
             soc = (self.ev_data[agent_id]['soc'] * self.C_k + P_tk * (time_interval / 60)) / self.C_k 
             self.ev_data[agent_id]['soc'] = soc
@@ -464,3 +476,28 @@ class EVBuildingEnv(EVChargingEnv):
             return self.daily_stats[current_date]['max'], self.daily_stats[current_date]['min'], self.daily_stats[current_date]['mean'], self.daily_stats[current_date]['std']
         else:
             return None, None, None, None
+
+    def dynamic_greedy_grouping(self, active_agent_ids):
+        
+        current_load = self.get_current_load(self.timestamp)
+        charge_group = []
+        discharge_group = []
+        hold_group = []
+
+        
+        if current_load >= self.curr_mean:
+            for agent_id in active_agent_ids:
+                if self.ev_data[agent_id]['soc'] >= self.get_ev_reasonable_soc(agent_id, self.timestamp):
+                    discharge_group.append(agent_id)
+                else:
+                    hold_group.append(agent_id)
+                        
+        elif current_load < self.curr_mean:
+            for agent_id in active_agent_ids:
+                if self.agents_status[agent_id]:
+                    if self.ev_data[agent_id]['soc'] <= self.get_ev_reasonable_soc(agent_id, self.timestamp):
+                        charge_group.append(agent_id)
+                    else:
+                        hold_group.append(agent_id)
+
+        return charge_group, discharge_group, hold_group

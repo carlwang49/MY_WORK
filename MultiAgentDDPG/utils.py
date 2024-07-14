@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
+import matplotlib.pyplot as plt
 
 def prepare_ev_request_data(parking_data_path, start_date, end_date):
     """
@@ -82,3 +83,30 @@ def min_max_scaling(value, min_val, max_val):
 
 def standardize(value, mean, std):
     return (value - mean) / std
+
+
+def plot_training_results(episode_rewards, args, result_dir):
+    # Calculate the average reward per episode
+    avg_rewards = np.mean(list(episode_rewards.values()), axis=0)
+
+    # Create the figure and axis
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x = range(1, args.episode_num + 1)
+
+    # Plot the average reward
+    ax.plot(x, avg_rewards, label='Average Reward', color='blue', linewidth=2)
+    
+    # Plot the running average reward
+    running_avg_rewards = get_running_reward(avg_rewards)
+    ax.plot(x, running_avg_rewards, label='Running Average Reward', color='orange', linestyle='--', linewidth=2)
+
+    # Customize the plot
+    ax.legend(fontsize=12)
+    ax.set_xlabel('Episode', fontsize=14)
+    ax.set_ylabel('Reward', fontsize=14)
+    ax.set_title('Training Result of GB-MARL-Discrete', fontsize=16)
+    ax.grid(True)
+    
+    # Save the figure
+    plt.savefig(os.path.join(result_dir, 'training_result_GB-MARL-Discrete.png'))
+    plt.show()
