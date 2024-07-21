@@ -12,23 +12,17 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-start_datetime_str = os.getenv('START_DATETIME', '2018-07-01')
-end_datetime_str = os.getenv('END_DATETIME', '2018-10-01')
-
-# Define the start and end datetime of the EV request data
-start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%d')
-end_datetime = datetime.strptime(end_datetime_str, '%Y-%m-%d')
-
 # Define the start and end date of the EV request data
-start_date = START_DATE = str(start_datetime.date())
-end_date = END_DATE = str(end_datetime.date())
+start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
+end_date = END_DATE = os.getenv('END_DATETIME', '2018-10-01')
 
+# Define the start and end date of the EV request data without year
 start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
 end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
 
-# Define the start and end time of the EV request data
-start_time = START_TIME = start_datetime
-end_time = END_TIME = end_datetime
+# Define the start and end datetime of the EV request data
+start_time = START_TIME = datetime.strptime(start_date, '%Y-%m-%d')
+end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
 # Define the number of agents
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
@@ -38,7 +32,7 @@ parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data
 
 # Define the directory name to save the result
 # dir_name = DIR_NAME = 'GB-MARL-Discrete'
-dir_name = DIR_NAME = 'GB-MARL-TEST'
+dir_name = DIR_NAME = os.getenv('DIR_NAME', 'GB-MARL-TEST')
 
 if __name__ == '__main__':
     
@@ -126,7 +120,7 @@ if __name__ == '__main__':
             next_obs, reward, done, info = env.step(action, top_level_action, env.timestamp)
 
             # add experience to replay buffer
-            maddpg.add(obs, action, reward, next_obs, done)
+            maddpg.add(obs, action, top_level_action, reward, next_obs, done)
             
             # update reward
             for agent_id, r in reward.items():  

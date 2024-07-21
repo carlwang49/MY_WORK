@@ -1,6 +1,5 @@
 from copy import deepcopy
 from typing import List
-
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
@@ -14,14 +13,12 @@ class Agent:
     def __init__(self, obs_dim, act_dim, global_obs_dim, actor_lr, critic_lr):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.actor = MLPNetwork(obs_dim, act_dim).to(self.device)
-        # critic input all the observations and actions
-        # if there are 3 agents for example, the input for critic is (obs1, obs2, obs3, act1, act2, act3)
         self.critic = MLPNetwork(global_obs_dim, 1).to(self.device)
         self.actor_optimizer = Adam(self.actor.parameters(), lr=actor_lr)
         self.critic_optimizer = Adam(self.critic.parameters(), lr=critic_lr)
         self.target_actor = deepcopy(self.actor).to(self.device)
         self.target_critic = deepcopy(self.critic).to(self.device)
-        self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
+        # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         
 
     @staticmethod
@@ -82,7 +79,7 @@ class Agent:
         
         # action = self.gumbel_softmax(logits)
         # action = F.gumbel_softmax(logits, hard=True)
-        action = torch.tanh(logits)
+        action = torch.tanh(logits) 
         return action.squeeze(0).detach()
 
     def critic_value(self, state_list: List[Tensor], act_list: List[Tensor]):
@@ -113,7 +110,7 @@ class Agent:
 class MLPNetwork(nn.Module):
     def __init__(self, in_dim, out_dim, hidden_dim=64, non_linear=nn.ReLU()):
         super(MLPNetwork, self).__init__()
-
+        
         self.net = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
             non_linear,
@@ -125,7 +122,7 @@ class MLPNetwork(nn.Module):
     @staticmethod
     def init(m):
         """init parameter of the module"""
-        gain = nn.init.calculate_gain('relu')
+        gain = nn.init.calculate_gain('relu') # gain for the ReLU activation function
         if isinstance(m, nn.Linear):
             torch.nn.init.xavier_uniform_(m.weight, gain=gain)
             m.bias.data.fill_(0.01)

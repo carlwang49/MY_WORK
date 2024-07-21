@@ -1,17 +1,17 @@
 import logging
 import os
 import pickle
-
 import numpy as np
 import torch
 import torch.nn.functional as F
-
 from Agent import Agent
 from TopAgent import TopAgent
 from Buffer import Buffer
 from TopBuffer import TopBuffer    
 
+
 def setup_logger(filename):
+    """Set up the logger"""
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
@@ -26,63 +26,73 @@ def setup_logger(filename):
 
 class MADDPG:
     def __init__(self, dim_info, capacity, batch_size, actor_lr, critic_lr, res_dir):
+        """dim_info: dict, key is agent_id, value is a tuple of obs_dim and act_dim"""
         
-        top_level_obs_dim = sum(val[0] for val in dim_info.values())
-        self.top_level_agent = TopAgent(top_level_obs_dim, 2, actor_lr)
-        self.top_level_buffer = TopBuffer(capacity, top_level_obs_dim, 'cuda')
+        # Top level agent
+        top_level_obs_dim = sum(val[0] for val in dim_info.values()) # top level agent observation dimension is the sum of all agents' observation dimension
+        top_level_act_dim = 1 # top level agent action dimension
+        self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr) # initialize the top level agent
+        self.top_level_buffer = TopBuffer(capacity, top_level_obs_dim, top_level_act_dim, 'cuda') # initialize the top level buffer
         
+        # Agents
         global_obs_act_dim = sum(sum(val) for val in dim_info.values())
         self.agents = {}
         self.buffers = {}
         
+        # initialize the agents and buffers
         for agent_id, (obs_dim, act_dim) in dim_info.items():
             self.agents[agent_id] = Agent(obs_dim, act_dim, global_obs_act_dim, actor_lr, critic_lr)
             self.buffers[agent_id] = Buffer(capacity, obs_dim, act_dim, 'cuda')
         
-        self.dim_info = dim_info
-        self.batch_size = batch_size
-        self.res_dir = res_dir
-        self.logger = setup_logger(os.path.join(res_dir, 'maddpg.log'))
+        self.dim_info = dim_info # observation and action dimension of all agents
+        self.batch_size = batch_size # batch size
+        self.res_dir = res_dir # result directory
+        self.logger = setup_logger(os.path.join(res_dir, 'maddpg.log')) # initialize the logger
 
-    def add(self, obs, action, reward, next_obs, done):
+    def add(self, obs, action, top_level_action, reward, next_obs, done):
+        """Add the transition to the buffer"""
         for agent_id in obs.keys():
             o = obs[agent_id]
             a = action[agent_id]
-            if isinstance(a, int):
+            if isinstance(a, int): # if the action is discrete, convert it to one-hot encoding
                 a = np.eye(self.dim_info[agent_id][1])[a]
             r = reward[agent_id]
             next_o = next_obs[agent_id]
             d = done[agent_id]
-            self.buffers[agent_id].add(o, a, r, next_o, d)
+            self.buffers[agent_id].add(o, a, r, next_o, d) # add the transition to the buffer
         
         top_level_obs = np.concatenate([obs[agent_id] for agent_id in obs.keys()])
         top_level_next_obs = np.concatenate([next_obs[agent_id] for agent_id in obs.keys()])
         top_level_reward = sum(reward.values()) / len(reward)
         top_level_done = any(done.values())
         
-        top_level_action = sum(action.values()) / len(action)
+        # add the transition to the top level buffer
         self.top_level_buffer.add(top_level_obs, top_level_action, top_level_reward, top_level_next_obs, top_level_done)
 
+
     def sample(self, batch_size, agents_status):
+        """Sample transitions from the buffer"""
         total_num = len(self.buffers['agent_0'])
         indices = np.random.choice(total_num, size=batch_size, replace=True)
  
         obs, act, reward, next_obs, done, next_act = {}, {}, {}, {}, {}, {}
         for agent_id, buffer in self.buffers.items():
-            o, a, r, n_o, d = buffer.sample(indices)
+            o, a, r, n_o, d = buffer.sample(indices) # sample transitions from the buffer
             obs[agent_id] = o
             act[agent_id] = a
             reward[agent_id] = r
             next_obs[agent_id] = n_o
             done[agent_id] = d
-            next_act[agent_id] = self.agents[agent_id].target_action(n_o, agents_status[agent_id])
+            next_act[agent_id] = self.agents[agent_id].target_action(n_o, agents_status[agent_id]) # get the next action using the target actor network
 
         return obs, act, reward, next_obs, done, next_act
 
     def select_action(self, obs, agents_status):
-        top_level_obs = np.concatenate([obs[agent_id] for agent_id in obs.keys()])
-        top_level_action = self.top_level_agent.action(torch.from_numpy(top_level_obs).unsqueeze(0).float())
-        top_level_action = torch.argmax(top_level_action, dim=1).item()
+        """Select action using MADDPG"""
+        
+        top_level_obs = np.concatenate([obs[agent_id] for agent_id in obs.keys()]) # concatenate the observations of all agents
+        top_level_action = self.top_level_agent.action(torch.from_numpy(top_level_obs).unsqueeze(0).float()) # select top level action
+        top_level_action = torch.argmax(top_level_action, dim=1).item() # get the index of the action with the highest probability
         
         actions = {}
         for agent, o in obs.items():
@@ -94,41 +104,46 @@ class MADDPG:
 
 
     def learn(self, batch_size, gamma, agents_status):
+        """Learn from the replay buffer"""
         for agent_id, agent in self.agents.items():
             obs, act, reward, next_obs, done, next_act = self.sample(batch_size, agents_status)
-            critic_value = agent.critic_value(list(obs.values()), list(act.values()))
-            next_target_critic_value = agent.target_critic_value(list(next_obs.values()), list(next_act.values()))
-            target_value = reward[agent_id] + gamma * next_target_critic_value * (1 - done[agent_id])
-            critic_loss = F.mse_loss(critic_value, target_value.detach(), reduction='mean')
-            agent.update_critic(critic_loss)
+            critic_value = agent.critic_value(list(obs.values()), list(act.values())) # calculate the value of the critic network
+            next_target_critic_value = agent.target_critic_value(list(next_obs.values()), list(next_act.values())) # calculate the value of the target critic network
+            target_value = reward[agent_id] + gamma * next_target_critic_value * (1 - done[agent_id]) # calculate the target value
+            critic_loss = F.mse_loss(critic_value, target_value.detach(), reduction='mean') # calculate the critic loss
+            agent.update_critic(critic_loss) # update the critic network
 
-            action, logits = agent.action(obs[agent_id], agents_status[agent_id], model_out=True)
-            act[agent_id] = action
-            actor_loss = -agent.critic_value(list(obs.values()), list(act.values())).mean()
-            actor_loss_pse = torch.pow(logits, 2).mean()
-            agent.update_actor(actor_loss + 1e-3 * actor_loss_pse)
+            action, logits = agent.action(obs[agent_id], agents_status[agent_id], model_out=True) # select action
+            act[agent_id] = action # update the action
+            actor_loss = -agent.critic_value(list(obs.values()), list(act.values())).mean() # calculate the actor loss
+            actor_loss_pse = torch.pow(logits, 2).mean() # calculate the actor loss pse
+            agent.update_actor(actor_loss + 1e-3 * actor_loss_pse) # update the actor network
             self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
         
-        # 上层智能体学习
+        # top level agent
         top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done = self.top_level_buffer.sample(batch_size)
-        top_level_critic_value = self.top_level_agent.critic_value(top_level_obs, top_level_act)
-        next_top_target_critic_value = self.top_level_agent.target_critic_value(top_level_next_obs, top_level_act)
-        top_target_value = top_level_reward + gamma * next_top_target_critic_value * (1 - top_level_done)
+        top_level_critic_value = self.top_level_agent.critic_value(top_level_obs, top_level_act) # calculate the value of the critic network
+        next_top_target_critic_value = self.top_level_agent.target_critic_value(top_level_next_obs, top_level_act) # calculate the value of the target critic network
+        top_target_value = top_level_reward + gamma * next_top_target_critic_value * (1 - top_level_done) # calculate the target value
 
-        top_critic_loss = F.mse_loss(top_level_critic_value, top_target_value.detach(), reduction='mean')
-        self.top_level_agent.update_critic(top_critic_loss)
+        top_critic_loss = F.mse_loss(top_level_critic_value, top_target_value.detach(), reduction='mean') # calculate the critic loss
+        self.top_level_agent.update_critic(top_critic_loss) # update the critic network
         
-        top_action, top_logits = self.top_level_agent.action(top_level_obs, model_out=True)
-        top_level_actor_loss = -self.top_level_agent.critic_value(top_level_obs, top_action).mean()
-        top_level_actor_loss_pse = torch.pow(top_logits, 2).mean()
-        self.top_level_agent.update_actor(top_level_actor_loss + 1e-3 * top_level_actor_loss_pse)
-        self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}')
+        top_action, top_logits = self.top_level_agent.action(top_level_obs, model_out=True) # select action
+        top_level_actor_loss = -self.top_level_agent.critic_value(top_level_obs, top_action).mean() # calculate the actor loss
+        top_level_actor_loss_pse = torch.pow(top_logits, 2).mean() # calculate the actor loss pse
+        self.top_level_agent.update_actor(top_level_actor_loss + 1e-3 * top_level_actor_loss_pse) # update the actor network
+        self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
         
     def update_target(self, tau):
+        """Update the target network"""
         def soft_update(from_network, to_network):
+            """Soft update the target network"""
             for from_p, to_p in zip(from_network.parameters(), to_network.parameters()):
+                # Update the target network parameters using the soft update rule
                 to_p.data.copy_(tau * from_p.data + (1.0 - tau) * to_p.data)
 
+        # update the target network for all agents
         for agent in self.agents.values():
             soft_update(agent.actor, agent.target_actor)
             soft_update(agent.critic, agent.target_critic)
@@ -143,8 +158,9 @@ class MADDPG:
 
     @classmethod
     def load(cls, dim_info, file):
+        """Load the model"""
         instance = cls(dim_info, 0, 0, 0, 0, os.path.dirname(file))
         data = torch.load(file)
         for agent_id, agent in instance.agents.items():
             agent.actor.load_state_dict(data[agent_id])
-        return instance
+        return instance # return the instance

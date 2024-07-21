@@ -6,7 +6,8 @@ class Buffer:
     """replay buffer for each agent"""
 
     def __init__(self, capacity, obs_dim, act_dim, device):
-        self.capacity = capacity
+       
+        self.capacity = capacity # capacity of the buffer
 
         self.obs = np.zeros((capacity, obs_dim))
         self.action = np.zeros((capacity, act_dim))
@@ -28,7 +29,7 @@ class Buffer:
         self.done[self._index] = done
 
         self._index = (self._index + 1) % self.capacity
-        if self._size < self.capacity:
+        if self._size < self.capacity: # if the buffer is not full
             self._size += 1
 
     def sample(self, indices):

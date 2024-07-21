@@ -4,19 +4,21 @@ from datetime import datetime, timedelta
 from logger_config import configured_logger as logger
 from EVChargingEnv import EVChargingEnv
 from collections import defaultdict
-from gym.spaces import Box, Discrete
 from ActionSpace import ActionSpace, DiscreteActionSpace, TopLevelActionSpace
 from PriceEnvironment import PriceEnvironment
 from utils import min_max_scaling, standardize
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
 Price_file_path = PRICE_FILE_PATH = '../Dataset/RTP/electricity_prices_from_201807010000_to_201812312359.csv'
-alpha = ALPHA = 0.7
-beta = BETA = 0.1
-gamma = GAMMA = 0.01
-max_load = MAX_LOAD = 1000  
-min_load = MIN_LOAD = 0
-
+alpha = ALPHA = float(os.getenv('REWARD_ALPHA'))
+beta = BETA = float(os.getenv('REWARD_BETA'))
+gamma = GAMMA = float(os.getenv('REWARD_GAMMA'))
+max_load = MAX_LOAD = int(os.getenv('MAX_LOAD'))
+min_load = MIN_LOAD = int(os.getenv('MIN_LOAD'))
+contract_capacity = CONTRACT_CAPACITY = int(os.getenv('CONTRACT_CAPACITY')) 
 
 class EVBuildingEnv(EVChargingEnv):
     def __init__(self, num_agents, start_time, end_time):
@@ -34,7 +36,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.price_env = PriceEnvironment(Price_file_path, start_time, end_time)
         
         # set contract capacity
-        self.contract_capacity = 800  
+        self.contract_capacity = contract_capacity  
 
         # Initialize building load
         self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
@@ -325,9 +327,6 @@ class EVBuildingEnv(EVChargingEnv):
         self.original_load = self.get_current_load(current_time)
         active_agent_ids = [agent_id for agent_id, status in self.agents_status.items() if status]
         
-        # Get the groups of EVs based on the current building load
-        # charge_group, discharge_group, hold_group = self.dynamic_greedy_grouping(active_agent_ids)
-        
         for agent_id in active_agent_ids:
             # Record the SoC history
             self.soc_history.loc[len(self.soc_history)] = ({
@@ -480,28 +479,3 @@ class EVBuildingEnv(EVChargingEnv):
             return self.daily_stats[current_date]['max'], self.daily_stats[current_date]['min'], self.daily_stats[current_date]['mean'], self.daily_stats[current_date]['std']
         else:
             return None, None, None, None
-
-    def dynamic_greedy_grouping(self, active_agent_ids):
-        
-        current_load = self.get_current_load(self.timestamp)
-        charge_group = []
-        discharge_group = []
-        hold_group = []
-
-        
-        if current_load >= self.curr_mean:
-            for agent_id in active_agent_ids:
-                if self.ev_data[agent_id]['soc'] >= self.get_ev_reasonable_soc(agent_id, self.timestamp):
-                    discharge_group.append(agent_id)
-                else:
-                    hold_group.append(agent_id)
-                        
-        elif current_load < self.curr_mean:
-            for agent_id in active_agent_ids:
-                if self.agents_status[agent_id]:
-                    if self.ev_data[agent_id]['soc'] <= self.get_ev_reasonable_soc(agent_id, self.timestamp):
-                        charge_group.append(agent_id)
-                    else:
-                        hold_group.append(agent_id)
-
-        return charge_group, discharge_group, hold_group

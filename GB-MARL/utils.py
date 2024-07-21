@@ -45,6 +45,26 @@ def prepare_ev_departure_data(parking_data_path, start_date, end_date):
 
 
 
+# def create_result_dir(method_name='EVBuildingEnv'):
+#     """
+#     Create a directory for storing results of a method.
+
+#     Args:
+#         method_name (str, optional): The name of the method. Defaults to 'EVBuildingEnv'.
+
+#     Returns:
+#         str: The path of the created result directory.
+#     """
+#     env_dir = os.path.join('../Result', method_name)
+    
+#     if not os.path.exists(env_dir):
+#         os.makedirs(env_dir)
+#     total_files = len([file for file in os.listdir(env_dir)])
+#     result_dir = os.path.join(env_dir, f'{total_files + 1}')
+#     os.makedirs(result_dir)
+    
+#     return result_dir
+
 def create_result_dir(method_name='EVBuildingEnv'):
     """
     Create a directory for storing results of a method.
@@ -59,11 +79,20 @@ def create_result_dir(method_name='EVBuildingEnv'):
     
     if not os.path.exists(env_dir):
         os.makedirs(env_dir)
-    total_files = len([file for file in os.listdir(env_dir)])
-    result_dir = os.path.join(env_dir, f'{total_files + 1}')
+    
+    # 獲取現有資料夾名稱中的數字
+    existing_dirs = [int(file) for file in os.listdir(env_dir) if file.isdigit()]
+    
+    if existing_dirs:
+        max_dir_num = max(existing_dirs)
+    else:
+        max_dir_num = 0
+    
+    result_dir = os.path.join(env_dir, f'{max_dir_num + 1}')
     os.makedirs(result_dir)
     
     return result_dir
+
 
 
 def get_running_reward(arr: np.ndarray, window=100):
