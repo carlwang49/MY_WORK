@@ -34,7 +34,7 @@ class TopLevelActionSpace:
     
     def __init__(self, action_values):
         self.action_values = np.array(action_values)
-        self.n = len(action_values)  # Define the number of actions
+        self.n = 1 # Define the number of actions
 
     def sample(self):
         sample = np.random.choice(self.action_values)

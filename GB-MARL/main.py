@@ -6,11 +6,14 @@ from datetime import datetime, timedelta
 from MADDPG import MADDPG
 from logger_config import configured_logger as logger
 from maddpg_parameter import parse_args, get_env
-from utils import prepare_ev_request_data, create_result_dir, prepare_ev_departure_data, plot_training_results
+from utils import prepare_ev_request_data, create_result_dir, prepare_ev_departure_data, plot_training_results, plot_global_training_results
 from tqdm import tqdm
 from dotenv import load_dotenv
 import os
 load_dotenv()
+
+alpha = ALPHA = float(os.getenv('REWARD_ALPHA'))
+beta = BETA = float(os.getenv('REWARD_BETA'))
 
 # Define the start and end date of the EV request data
 start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
@@ -44,14 +47,15 @@ if __name__ == '__main__':
     ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
     
     # create environment
-    env, dim_info = get_env(num_agents, start_time, end_time)
+    env, dim_info, top_dim_info = get_env(num_agents, start_time, end_time)
 
     # create a new folder to save the result
-    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}') 
+    result_dir = create_result_dir(f'{DIR_NAME}_alpha{alpha}_beta{beta}_num{NUM_AGENTS}') 
     # result_dir = create_result_dir(f'{DIR_NAME}') 
     
     # create MADDPG agent
-    maddpg = MADDPG(dim_info, args.buffer_capacity, args.batch_size, args.actor_lr, args.critic_lr, result_dir) 
+    maddpg = MADDPG(dim_info, top_dim_info, args.buffer_capacity, args.batch_size, 
+                    args.top_level_buffer_capacity, args.top_level_batch_size, args.actor_lr, args.critic_lr, args.epsilon, args.sigma, result_dir) 
 
     step = 0  # global step counter
     agent_num = env.num_agents # number of agents
@@ -62,17 +66,24 @@ if __name__ == '__main__':
         for agent_id in env.agents
     }
     
+    episode_global_rewards = np.zeros(args.episode_num)  # global reward of each episode
+    
     # training
     for episode in tqdm(range(args.episode_num)):
         
+        # decrease epsilon
+        maddpg.change_top_level_agent_parameter(args.epsilon * (1 - episode / args.episode_num), args.sigma_decay)
+        
         # reset the timestamp to the start time of the environment
         env.timestamp = env.start_time 
-        obs = env.reset()
+        obs, global_observation = env.reset()
         
         # agent reward of the current episode
         agent_reward = {
             agent_id: 0 for agent_id in env.agents
         }  
+
+        curr_global_reward = 0  # global reward of the current episode
         
         while env.timestamp <= env.end_time:  
             
@@ -107,32 +118,35 @@ if __name__ == '__main__':
                 for agent_id in env.agents:
                     if env.agents_status[agent_id]:
                         # if the agent is connected 
-                        top_level_action = env.top_level_action_spact().sample() # sample top level action
+                        top_level_action = env.get_top_level_action_space().sample() # sample top level action
                         action[agent_id] = env.action_space(agent_id).sample()
                     else:
                         # if the agent is not connected
                         top_level_action = -1 # set the top level action to -1
                         action[agent_id] = -1 # set the action to -1
             else:
-                action, top_level_action = maddpg.select_action(obs, env.agents_status) # select action using MADDPG
-
+                action, top_level_action = maddpg.select_action(obs, global_observation, env.agents_status) # select action using MADDPG
+                # print(f'top_level_action: {top_level_action}')
             # step the environment
-            next_obs, reward, done, info = env.step(action, top_level_action, env.timestamp)
+            next_obs, next_global_observation, reward, global_reward, done, info = env.step(action, top_level_action, env.timestamp)
 
             # add experience to replay buffer
-            maddpg.add(obs, action, top_level_action, reward, next_obs, done)
+            maddpg.add(obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done)
             
             # update reward
             for agent_id, r in reward.items():  
                 agent_reward[agent_id] += r
             
+            curr_global_reward += global_reward
+            
             # learn from the replay buffer
             if step >= args.random_steps and step % args.learn_interval == 0:  # learn every few steps
-                maddpg.learn(args.batch_size, args.gamma, env.agents_status) # learn from the replay buffer
+                maddpg.learn(args.batch_size, args.top_level_batch_size, args.gamma, env.agents_status) # learn from the replay buffer
                 maddpg.update_target(args.tau) # update target network
                 
             # update observation
             obs = next_obs
+            global_observation = next_global_observation
 
             # if the current time is greater than or equal to the end time, break
             if env.timestamp >= env.end_time: 
@@ -142,6 +156,8 @@ if __name__ == '__main__':
         # episode finishes
         for agent_id, r in agent_reward.items():  # record reward
             episode_rewards[agent_id][episode] = r
+            
+        episode_global_rewards[episode] = curr_global_reward
        
         if (episode + 1) % 100 == 0:  # print info every 100 episodes
             message = f'episode {episode + 1}, '
@@ -151,9 +167,11 @@ if __name__ == '__main__':
                 sum_reward += r
             message += f'sum reward: {sum_reward}'
             logger.bind(console=True).info(message)
+            logger.bind(console=True).info(f'global reward: {curr_global_reward}')
 
     maddpg.save(episode_rewards)  # save model
     plot_training_results(episode_rewards, args, result_dir)
+    plot_global_training_results(episode_global_rewards, args, result_dir)
 
     # save soc history and charging records
     soc_history_file = f'{result_dir}/soc_history.csv'

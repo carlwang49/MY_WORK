@@ -25,14 +25,14 @@ def setup_logger(filename):
     return logger
 
 class MADDPG:
-    def __init__(self, dim_info, capacity, batch_size, actor_lr, critic_lr, res_dir):
+    def __init__(self, dim_info, top_dim_info, capacity, batch_size, top_level_buffer_capacity, top_level_batch_size, actor_lr, critic_lr, epsilon, sigma, res_dir):
         """dim_info: dict, key is agent_id, value is a tuple of obs_dim and act_dim"""
         
         # Top level agent
-        top_level_obs_dim = sum(val[0] for val in dim_info.values()) # top level agent observation dimension is the sum of all agents' observation dimension
-        top_level_act_dim = 1 # top level agent action dimension
-        self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr) # initialize the top level agent
-        self.top_level_buffer = TopBuffer(capacity, top_level_obs_dim, top_level_act_dim, 'cuda') # initialize the top level buffer
+        top_level_obs_dim = top_dim_info[0] # top level agent observation dimension is the sum of all agents' observation dimension
+        top_level_act_dim = top_dim_info[1] # top level agent action dimension
+        self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr, epsilon, sigma) # initialize the top level agent
+        self.top_level_buffer = TopBuffer(top_level_buffer_capacity, top_level_obs_dim, top_level_act_dim, 'cuda') # initialize the top level buffer
         
         # Agents
         global_obs_act_dim = sum(sum(val) for val in dim_info.values())
@@ -46,10 +46,15 @@ class MADDPG:
         
         self.dim_info = dim_info # observation and action dimension of all agents
         self.batch_size = batch_size # batch size
+        self.top_level_batch_size = top_level_batch_size # top level batch size
         self.res_dir = res_dir # result directory
         self.logger = setup_logger(os.path.join(res_dir, 'maddpg.log')) # initialize the logger
+        
+    def change_top_level_agent_parameter(self, epsilon, sigma_decay):
+        self.top_level_agent.epsilon = epsilon
+        self.top_level_agent.sigma *= sigma_decay
 
-    def add(self, obs, action, top_level_action, reward, next_obs, done):
+    def add(self, obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done):
         """Add the transition to the buffer"""
         for agent_id in obs.keys():
             o = obs[agent_id]
@@ -61,9 +66,12 @@ class MADDPG:
             d = done[agent_id]
             self.buffers[agent_id].add(o, a, r, next_o, d) # add the transition to the buffer
         
-        top_level_obs = np.concatenate([obs[agent_id] for agent_id in obs.keys()])
-        top_level_next_obs = np.concatenate([next_obs[agent_id] for agent_id in obs.keys()])
-        top_level_reward = sum(reward.values()) / len(reward)
+        # top_level_obs = np.concatenate([obs[agent_id] for agent_id in obs.keys()])
+        # top_level_next_obs = np.concatenate([next_obs[agent_id] for agent_id in obs.keys()])
+        # top_level_reward = sum(reward.values()) / len(reward)
+        top_level_obs = global_observation
+        top_level_next_obs = next_global_observation
+        top_level_reward = global_reward
         top_level_done = any(done.values())
         
         # add the transition to the top level buffer
@@ -87,12 +95,14 @@ class MADDPG:
 
         return obs, act, reward, next_obs, done, next_act
 
-    def select_action(self, obs, agents_status):
+    def select_action(self, obs, global_observation, agents_status):
         """Select action using MADDPG"""
         
-        top_level_obs = np.concatenate([obs[agent_id] for agent_id in obs.keys()]) # concatenate the observations of all agents
+        top_level_obs = global_observation # concatenate the observations of all agents
         top_level_action = self.top_level_agent.action(torch.from_numpy(top_level_obs).unsqueeze(0).float()) # select top level action
-        top_level_action = torch.argmax(top_level_action, dim=1).item() # get the index of the action with the highest probability
+        top_level_action = int(top_level_action.item())# get the top level action
+        # print(top_level_action)
+        # top_level_action = torch.argmax(top_level_action, dim=1).item() # get the index of the action with the highest probability
         
         actions = {}
         for agent, o in obs.items():
@@ -103,7 +113,7 @@ class MADDPG:
         return actions, top_level_action
 
 
-    def learn(self, batch_size, gamma, agents_status):
+    def learn(self, batch_size, top_level_batch_size, gamma, agents_status):
         """Learn from the replay buffer"""
         for agent_id, agent in self.agents.items():
             obs, act, reward, next_obs, done, next_act = self.sample(batch_size, agents_status)
@@ -121,7 +131,7 @@ class MADDPG:
             self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
         
         # top level agent
-        top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done = self.top_level_buffer.sample(batch_size)
+        top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done = self.top_level_buffer.sample(top_level_batch_size)
         top_level_critic_value = self.top_level_agent.critic_value(top_level_obs, top_level_act) # calculate the value of the critic network
         next_top_target_critic_value = self.top_level_agent.target_critic_value(top_level_next_obs, top_level_act) # calculate the value of the target critic network
         top_target_value = top_level_reward + gamma * next_top_target_critic_value * (1 - top_level_done) # calculate the target value

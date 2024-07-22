@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import pickle
 
 def prepare_ev_request_data(parking_data_path, start_date, end_date):
     """
@@ -133,9 +134,33 @@ def plot_training_results(episode_rewards, args, result_dir):
     ax.legend(fontsize=12)
     ax.set_xlabel('Episode', fontsize=14)
     ax.set_ylabel('Reward', fontsize=14)
-    ax.set_title('Training Result of GB-MARL-Discrete', fontsize=16)
+    ax.set_title('Training Agent Result of GB-MARL', fontsize=16)
     ax.grid(True)
     
     # Save the figure
-    plt.savefig(os.path.join(result_dir, 'training_result_GB-MARL-Discrete.png'))
+    plt.savefig(os.path.join(result_dir, 'training_result_agent_reward_GB-MARL.png'))
     plt.show()
+    
+
+def plot_global_training_results(episode_global_rewards, args, result_dir):
+    # Create the figure and axis
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x = range(1, args.episode_num + 1)
+
+    # Plot the global reward
+    ax.plot(x, episode_global_rewards, label='Global Reward', color='green', linewidth=2, linestyle=':')
+    
+    # Customize the plot
+    ax.legend(fontsize=12)
+    ax.set_xlabel('Episode', fontsize=14)
+    ax.set_ylabel('Reward', fontsize=14)
+    ax.set_title('Training Global Result of GB-MARL', fontsize=16)
+    ax.grid(True)
+    
+    # Save the figure
+    plt.savefig(os.path.join(result_dir, 'training_result_global_reward_GB-MARL.png'))
+    plt.show()
+    
+    # Save the global rewards to a pickle file
+    with open(os.path.join(result_dir, 'global_reward.pkl'), 'wb') as f:
+        pickle.dump(episode_global_rewards, f)
