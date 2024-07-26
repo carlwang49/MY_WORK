@@ -116,7 +116,7 @@ if __name__ == '__main__':
             if step < args.random_steps:
                 action = {}
                 top_level_action = env.get_top_level_action_space().sample() # sample top level action
-                print(f'top_level_action: {top_level_action}')
+                # print(f'top_level_action: {top_level_action}')
                 for agent_id in env.agents:
                     if env.agents_status[agent_id]:
                         # if the agent is connected 
