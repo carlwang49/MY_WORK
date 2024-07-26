@@ -9,7 +9,7 @@ class ActionSpace:
  
     def sample(self):
         sample = np.random.uniform(self.low, self.high, self.shape)
-        return round(float(sample), 4)
+        return round(float(sample), 2)
     
     def size(self):
         return self.shape[0]
@@ -42,3 +42,4 @@ class TopLevelActionSpace:
     
     def size(self):
         return self.n
+    

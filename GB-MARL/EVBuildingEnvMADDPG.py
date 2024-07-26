@@ -24,9 +24,9 @@ class EVBuildingEnv(EVChargingEnv):
     def __init__(self, num_agents, start_time, end_time):
         super().__init__(num_agents, start_time, end_time)
         
-        # set TOU price
-        self.tou_price_in_weekday = [0.056] * 8 + [0.092] * 4 + [0.267] * 6 + [0.092] * 5 + [0.056] * 1
-        self.tou_price_in_weekend = [0.056] * 24
+        # # set TOU price
+        # self.tou_price_in_weekday = [0.056] * 8 + [0.092] * 4 + [0.267] * 6 + [0.092] * 5 + [0.056] * 1
+        # self.tou_price_in_weekend = [0.056] * 24
         
         # init the maximum and minimum SoC
         self.SoC_upper_bound_dict = {f'agent_{i}': 0 for i in range(num_agents)}
@@ -59,6 +59,8 @@ class EVBuildingEnv(EVChargingEnv):
         # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = {f'agent_{i}': ActionSpace(0, 1, (1,)) for i in range(num_agents)}  
         # self.action_spaces = {f'agent_{i}': DiscreteActionSpace(self.action_values) for i in range(num_agents)}  
+        self.charging_action_spaces = {f'agent_{i}': ActionSpace(0.4, 1, (1,)) for i in range(num_agents)}
+        self.discharging_action_spaces = {f'agent_{i}': ActionSpace(0, 0.6, (1,)) for i in range(num_agents)}
         
         # Initialize top level action space
         self.top_level_action_space = TopLevelActionSpace([0, 1])
@@ -66,7 +68,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.dones = {agent_id: False for agent_id in self.agents}
         self.infos = {}
         self.inactive_observation = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
-        self.top_observation = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
+        self.top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
         
         # # Calculate the average of the top 10% of historical peak electricity consumption
         # sorted_load_history = self.building_load['Total_Power(kWh)'].sort_values(ascending=False)
@@ -113,6 +115,12 @@ class EVBuildingEnv(EVChargingEnv):
     """get the action space for each agent in the environment"""
     def action_space(self, agent_id):     
         return self.action_spaces[agent_id]
+    
+    def charging_action_space(self, agent_id):
+        return self.charging_action_spaces[agent_id]
+    
+    def discharging_action_space(self, agent_id):
+        return self.discharging_action_spaces[agent_id]
     
     def get_top_level_observation_space(self):
         return self.top_observation
@@ -190,7 +198,7 @@ class EVBuildingEnv(EVChargingEnv):
         # If the current time is the start time, return the initial state
         if current_time == self.start_time or self.agents_status[agent_id] == False:
             return self.inactive_observation
-    
+        
         # Get the current SoC
         soc = round(self.ev_data[agent_id]['soc'], 2)
         
@@ -229,9 +237,15 @@ class EVBuildingEnv(EVChargingEnv):
         current_price = self.price_env.get_current_price(current_time)
         # current_price = round(self.price_env.get_current_price(current_time), 2)
         
+        # get current parking number
+        current_parking_number = self.current_parking_number
+        
+        # get total EV energy
+        total_ev_energy = sum([self.ev_data[agent_id]['soc'] * self.C_k for agent_id in self.agents_status if self.agents_status[agent_id]])
+        
         past_avg_load, future_avg_load, past_avg_price, future_avg_price = self.calculate_load_and_price_trends(current_time)
         
-        state = [current_price, normalized_load_diff, past_avg_load, future_avg_load, past_avg_price, future_avg_price]
+        state = [current_parking_number, total_ev_energy, current_price, normalized_load_diff, past_avg_load, future_avg_load, past_avg_price, future_avg_price]
         
         # Return the state information
         return np.array(state, dtype=np.float32)
@@ -273,7 +287,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.dones = {agent_id: False for agent_id in self.agents}
         self.infos = {}
         self.inactive_observation = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
-        self.top_observation = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
+        self.top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
         
         self.current_parking = np.zeros(self.num_agents, dtype=bool)  # Whether the charging pile is connected
         self.current_parking_number = 0  # Number of currently connected charging piles
@@ -323,28 +337,77 @@ class EVBuildingEnv(EVChargingEnv):
         return observations, global_observation
     
     
-    def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict):
+    # def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict, top_level_action):
+    #     """calculate the reward for each agent and the global reward"""
         
+    #     def log_scale_reward(reward, base=10):
+    #         return np.log1p(abs(reward)) / np.log(base + 1e-6) * np.sign(reward)
+        
+    #     flag = 1 if top_level_action == 0 else -1
+        
+    #     # Initialize the rewards
+    #     global_reward = 0
+    #     rewards = {agent_id: 0 for agent_id in self.agents}
+        
+    #     current_price = self.price_env.get_current_price(self.timestamp) # Get the current electriity price
+    #     total_action_impact = sum(P_tk_dict.values()) # Get the total action impact
+    #     new_load = original_load + total_action_impact # Calculate the new building load
+    #     load_diff = self.curr_mean - new_load 
+    #     penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
+        
+    #     # Calculate the global reward
+    #     global_reward = beta * (-np.log(1 + abs(load_diff))) - (1 - beta) * np.log(1 + penalty)
+    #     # if top_level_action == 0 and original_load > self.curr_mean:
+    #     #     global_reward = -10
+    #     # elif top_level_action == 1 and original_load < self.curr_mean:
+    #     #     global_reward = -10
+        
+    #     # Calculate the local reward for each agent
+    #     for agent_id in active_agent_ids:
+    #         P_tk = P_tk_dict[agent_id]
+    #         r_tk = -P_tk * current_price
+    #         r_soc = abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
+    #         local_reward = alpha * r_tk - (1-alpha) * r_soc
+    #         # local_reward = r_tk
+    #         rewards[agent_id] = local_reward
+            
+    #     # global_reward = flag * total_action_impact
+    #     return rewards, global_reward
+    
+    def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict, top_level_action):
+        """Calculate the reward for each agent and the global reward"""
+        
+        def log_scale_reward(reward, base=10):
+            return np.log1p(abs(reward)) / np.log(base + 1e-6) * np.sign(reward)
+        
+        flag = 1 if top_level_action == 0 else -1
+        
+        # Initialize the rewards
         global_reward = 0
         rewards = {agent_id: 0 for agent_id in self.agents}
-        current_price = self.price_env.get_current_price(self.timestamp)
-        total_action_impact = sum(P_tk_dict.values())
-        new_load = original_load + total_action_impact
-        load_diff = -abs(self.curr_mean - new_load)
-        penalty = original_load + total_action_impact - self.contract_capacity if original_load + total_action_impact - self.contract_capacity > 0 else 0
-        global_reward = beta * (-new_load * current_price - penalty) + (1-beta) * load_diff
-        # global_reward = beta * load_diff
         
+        current_price = self.price_env.get_current_price(self.timestamp)  # Get the current electricity price
+        total_action_impact = sum(P_tk_dict.values())  # Get the total action impact
+        new_load = original_load + total_action_impact  # Calculate the new building load
+        load_diff = abs(self.curr_mean - new_load) 
+        penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
+        
+        # Calculate the global reward
+        global_reward = -current_price * new_load - penalty
+        global_reward = log_scale_reward(global_reward) * beta - (1 - beta) * log_scale_reward(load_diff)
+        
+        # Calculate the local reward for each agent
         for agent_id in active_agent_ids:
             P_tk = P_tk_dict[agent_id]
             r_tk = -P_tk * current_price
             r_soc = abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
-            rewards[agent_id] =  alpha * r_tk - (1-alpha) * r_soc
-
+            local_reward = alpha * r_tk - (1 - alpha) * r_soc
+            rewards[agent_id] = local_reward
+            
         return rewards, global_reward
-    
 
     def step(self, actions, top_level_action, current_time: datetime, time_interval: int = 60):
+        """take a step in the environment"""
         
         # Initialize the rewards, dones, infos, and observations
         rewards = defaultdict(int)
@@ -368,16 +431,12 @@ class EVBuildingEnv(EVChargingEnv):
             action = actions[agent_id] # Get the action for the current agent
             P_max_tk, P_min_tk, SoC_lower_bound, SoC_upper_bound = self.get_deb_constraints(agent_id, current_time + timedelta(hours=1)) # Get the maximum and minimum power output
             
-            if top_level_action == 0: 
-                # Charging mode
-                action = np.clip(action, 0.5, 1)
-                # P_min_tk = max(P_min_tk, 0)
-            elif top_level_action == 1:
-                # Discharging mode
-                action = np.clip(action, 0, 0.5)
-                # P_max_tk = min(P_max_tk, 0)
+            # if top_level_action == 0 and P_min_tk < 0: # Charging mode
+            #     P_min_tk = 0
+            # elif top_level_action == 1 and P_min_tk < 0 and P_max_tk > 0: # Discharging mode
+            #     P_max_tk = 0
                 
-            P_tk =  action * (P_max_tk - P_min_tk) + P_min_tk # Calculate the power output based on the action
+            P_tk = action * (P_max_tk - P_min_tk) + P_min_tk # Calculate the power output based on the action
             # P_tk = 0 if top_level_action == -1 else P_tk
             soc = (self.ev_data[agent_id]['soc'] * self.C_k + P_tk * (time_interval / 60)) / self.C_k 
             self.ev_data[agent_id]['soc'] = soc
@@ -398,7 +457,7 @@ class EVBuildingEnv(EVChargingEnv):
                 'total_action_impact': total_action_impact  
             })
 
-        rewards, global_reward = self.calculate_reward(self.original_load, active_agent_ids, P_tk_dict)
+        rewards, global_reward = self.calculate_reward(self.original_load, active_agent_ids, P_tk_dict, top_level_action)
 
         next_observations = {
             agent: self.observe(agent, current_time + timedelta(hours=1)) 

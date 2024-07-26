@@ -73,7 +73,7 @@ if __name__ == '__main__':
         
         # decrease epsilon
         maddpg.change_top_level_agent_parameter(args.epsilon * (1 - episode / args.episode_num), args.sigma_decay)
-        
+        maddpg.top_level_agent.update_target_network(0.1)
         # reset the timestamp to the start time of the environment
         env.timestamp = env.start_time 
         obs, global_observation = env.reset()
@@ -115,27 +115,35 @@ if __name__ == '__main__':
             step += 1
             if step < args.random_steps:
                 action = {}
+                top_level_action = env.get_top_level_action_space().sample() # sample top level action
+                print(f'top_level_action: {top_level_action}')
                 for agent_id in env.agents:
                     if env.agents_status[agent_id]:
                         # if the agent is connected 
-                        top_level_action = env.get_top_level_action_space().sample() # sample top level action
-                        action[agent_id] = env.action_space(agent_id).sample()
+                        if top_level_action == 0:
+                            action[agent_id] = env.charging_action_space(agent_id).sample()
+                            # print(f'charging action: {action[agent_id]}')
+                        else:
+                            action[agent_id] = env.discharging_action_space(agent_id).sample()
+                            # print(f'discharging action: {action[agent_id]}')
                     else:
                         # if the agent is not connected
-                        top_level_action = -1 # set the top level action to -1
-                        action[agent_id] = -1 # set the action to -1
+                        action[agent_id] = -1e10 # set the action to -1
             else:
                 action, top_level_action = maddpg.select_action(obs, global_observation, env.agents_status) # select action using MADDPG
-                # print(f'top_level_action: {top_level_action}')
+                # print(f'top_level_action: {top_level_action}, action: {action}')
+            # print(f'top_level_action: {top_level_action}, action: {action}')
+            # import time
+            # time.sleep(1)
             # step the environment
             next_obs, next_global_observation, reward, global_reward, done, info = env.step(action, top_level_action, env.timestamp)
 
             # add experience to replay buffer
-            maddpg.add(obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done)
+            maddpg.add(obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done, env.agents_status)
             
             # update reward
             for agent_id, r in reward.items():  
-                agent_reward[agent_id] += r
+                agent_reward[agent_id] += r 
             
             curr_global_reward += global_reward
             
@@ -147,6 +155,7 @@ if __name__ == '__main__':
             # update observation
             obs = next_obs
             global_observation = next_global_observation
+            # print(global_observation)
 
             # if the current time is greater than or equal to the end time, break
             if env.timestamp >= env.end_time: 

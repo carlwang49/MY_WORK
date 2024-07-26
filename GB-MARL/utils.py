@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
+import logging
 import matplotlib.pyplot as plt
 import pickle
 
@@ -44,6 +45,20 @@ def prepare_ev_departure_data(parking_data_path, start_date, end_date):
     
     return ev_departure_dict
 
+
+def setup_logger(filename):
+    """Set up the logger"""
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    handler = logging.FileHandler(filename, mode='w')
+    handler.setLevel(logging.INFO)
+
+    formatter = logging.Formatter('%(asctime)s--%(levelname)s--%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    handler.setFormatter(formatter)
+
+    logger.addHandler(handler)
+    return logger
 
 
 # def create_result_dir(method_name='EVBuildingEnv'):
