@@ -3,7 +3,6 @@ import pickle
 import numpy as np
 import torch
 import torch.nn.functional as F 
-from Agent import Agent
 from TopAgent import TopAgent
 from Buffer import Buffer
 from TopBuffer import TopBuffer 
@@ -13,7 +12,8 @@ from DischargingAgent import DischargingAgent
 
 
 class MADDPG:
-    def __init__(self, dim_info, top_dim_info, capacity, batch_size, top_level_buffer_capacity, top_level_batch_size, actor_lr, critic_lr, epsilon, sigma, res_dir):
+    def __init__(self, dim_info, top_dim_info, capacity, batch_size, top_level_buffer_capacity, 
+                 top_level_batch_size, actor_lr, critic_lr, epsilon, sigma, res_dir):
         """dim_info: dict, key is agent_id, value is a tuple of obs_dim and act_dim"""
         
         # Top level agent
@@ -22,21 +22,12 @@ class MADDPG:
         self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr, epsilon, sigma) # initialize the top level agent
         self.top_level_buffer = TopBuffer(top_level_buffer_capacity, top_level_obs_dim, top_level_act_dim, 'cuda') # initialize the top level buffer
         
-        # Agents
-        global_obs_act_dim = sum(sum(val) for val in dim_info.values()) # global observation and action dimension
-        # self.agents = {} # agents
-        # self.buffers = {} # buffers
-        
         self.charging_agent = {} # charging agents
         self.charging_buffers = {} # charging buffers
         self.discharging_agent = {} # discharging agents
         self.discharging_buffers = {} # discharging buffers
         
-        # initialize the agents and buffers
-        # for agent_id, (obs_dim, act_dim) in dim_info.items():
-        #     self.agents[agent_id] = Agent(obs_dim, act_dim, global_obs_act_dim, actor_lr, critic_lr)
-        #     self.buffers[agent_id] = Buffer(capacity, obs_dim, act_dim, 'cuda')
-        
+        global_obs_act_dim = sum(sum(val) for val in dim_info.values()) # global observation and action dimension
         for agent_id, (obs_dim, act_dim) in dim_info.items():
             self.charging_agent[agent_id] = ChargingAgent(obs_dim, act_dim, global_obs_act_dim, actor_lr, critic_lr)
             self.charging_buffers[agent_id] = Buffer(capacity, obs_dim, act_dim, 'cuda')
@@ -52,13 +43,13 @@ class MADDPG:
         self.logger = setup_logger(os.path.join(res_dir, 'maddpg.log')) # initialize the logger
 
         
-    def change_top_level_agent_parameter(self, epsilon, sigma_decay):
-        """Change the epsilon and sigma of the top level agent"""
-        self.top_level_agent.epsilon = epsilon
-        self.top_level_agent.sigma *= sigma_decay
+    # def change_top_level_agent_parameter(self, epsilon, sigma_decay):
+    #     """Change the epsilon and sigma of the top level agent"""
+    #     self.top_level_agent.epsilon = epsilon
+    #     self.top_level_agent.sigma *= sigma_decay
 
 
-    def add(self, obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done, agents_status):
+    def add(self, obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done):
         """Add the transition to the buffer"""
         
         if top_level_action == 0:
@@ -82,11 +73,6 @@ class MADDPG:
                 d = done[agent_id]
                 self.discharging_buffers[agent_id].add(o, a, r, next_o, d) # add the transition to the buffer
         
-        # top_level_obs = np.concatenate([obs[agent_id] for agent_id in obs.keys()])
-        # top_level_next_obs = np.concatenate([next_obs[agent_id] for agent_id in obs.keys()])
-        # top_level_reward = sum(reward.values()) / len(reward)
-        # active_agents = [agent_id for agent_id, status in agents_status.items() if status]
-        # active_agents_num = len(active_agents) if active_agents else 1
         top_level_obs = global_observation 
         top_level_next_obs = next_global_observation
         top_level_reward = global_reward
@@ -130,11 +116,10 @@ class MADDPG:
     def select_action(self, obs, global_observation, agents_status):
         """Select action using MADDPG"""
         
-        top_level_obs = global_observation # concatenate the observations of all agents
+        top_level_obs = global_observation
         top_level_action = self.top_level_agent.action(torch.from_numpy(top_level_obs).unsqueeze(0).float()) # select top level action
-        top_level_action = int(top_level_action.item())# get the top level action
-        # print(top_level_action)
-        # top_level_action = torch.argmax(top_level_action, dim=1).item() # get the index of the action with the highest probability
+        top_level_action = int(top_level_action.item()) # get the top level action
+
         actions = {}
         if top_level_action == 0:
             for agent, o in obs.items():
@@ -154,6 +139,7 @@ class MADDPG:
 
     def learn(self, batch_size, top_level_batch_size, gamma, agents_status):
         """Learn from the replay buffer"""
+        
         for agent_id, agent in self.charging_agent.items():
             obs, act, reward, next_obs, done, next_act = self.sample(batch_size, agents_status, top_level_action=0)
             critic_value = agent.critic_value(list(obs.values()), list(act.values())) # calculate the value of the critic network
@@ -189,7 +175,6 @@ class MADDPG:
         top_level_critic_value = self.top_level_agent.critic_value(top_level_obs, top_level_act) # calculate the value of the critic network
         next_top_target_critic_value = self.top_level_agent.target_critic_value(top_level_next_obs, top_level_act) # calculate the value of the target critic network
         top_target_value = top_level_reward + gamma * next_top_target_critic_value * (1 - top_level_done) # calculate the target value
-
         top_critic_loss = F.mse_loss(top_level_critic_value, top_target_value.detach(), reduction='mean') # calculate the critic loss
         self.top_level_agent.update_critic(top_critic_loss) # update the critic network
         
@@ -215,11 +200,16 @@ class MADDPG:
         for agent in self.discharging_agent.values():
             soft_update(agent.actor, agent.target_actor)
             soft_update(agent.critic, agent.target_critic)
+            
+        # update the target network for the top level agent
+        soft_update(self.top_level_agent.actor, self.top_level_agent.target_actor)  
+        soft_update(self.top_level_agent.critic, self.top_level_agent.target_critic)
 
     def save(self, reward):
         model_state = {
             'charging_agent': {name: agent.actor.state_dict() for name, agent in self.charging_agent.items()},
-            'discharging_agent': {name: agent.actor.state_dict() for name, agent in self.discharging_agent.items()}
+            'discharging_agent': {name: agent.actor.state_dict() for name, agent in self.discharging_agent.items()},
+            'top_level_agent': self.top_level_agent.actor.state_dict()
         }
         torch.save(model_state, os.path.join(self.res_dir, 'model.pt'))
         
@@ -237,5 +227,7 @@ class MADDPG:
         
         for agent_id, agent in instance.discharging_agent.items():
             agent.actor.load_state_dict(data['discharging_agent'][agent_id])
+        
+        instance.top_level_agent.actor.load_state_dict(data['top_level_agent'])
         
         return instance  # return the instance

@@ -1,13 +1,13 @@
 import pandas as pd
-import os
 import numpy as np
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 from datetime import datetime, timedelta
 from MADDPG import MADDPG
 from logger_config import configured_logger as logger
 from maddpg_parameter import parse_args, get_env
-from utils import prepare_ev_request_data, create_result_dir, prepare_ev_departure_data, plot_training_results, plot_global_training_results
-from tqdm import tqdm
+from utils import (prepare_ev_request_data, create_result_dir, 
+                   prepare_ev_departure_data, plot_training_results, 
+                   plot_global_training_results)
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -72,8 +72,9 @@ if __name__ == '__main__':
     for episode in tqdm(range(args.episode_num)):
         
         # decrease epsilon
-        maddpg.change_top_level_agent_parameter(args.epsilon * (1 - episode / args.episode_num), args.sigma_decay)
-        maddpg.top_level_agent.update_target_network(0.1)
+        # maddpg.change_top_level_agent_parameter(args.epsilon * (1 - episode / args.episode_num), args.sigma_decay)
+        # maddpg.top_level_agent.update_target_network(0.1)
+        
         # reset the timestamp to the start time of the environment
         env.timestamp = env.start_time 
         obs, global_observation = env.reset()
@@ -132,14 +133,12 @@ if __name__ == '__main__':
             else:
                 action, top_level_action = maddpg.select_action(obs, global_observation, env.agents_status) # select action using MADDPG
                 # print(f'top_level_action: {top_level_action}, action: {action}')
-            # print(f'top_level_action: {top_level_action}, action: {action}')
-            # import time
-            # time.sleep(1)
-            # step the environment
+                
             next_obs, next_global_observation, reward, global_reward, done, info = env.step(action, top_level_action, env.timestamp)
 
             # add experience to replay buffer
-            maddpg.add(obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done, env.agents_status)
+            maddpg.add(obs, global_observation, action, top_level_action, reward, 
+                       global_reward, next_obs, next_global_observation, done)
             
             # update reward
             for agent_id, r in reward.items():  
@@ -161,7 +160,6 @@ if __name__ == '__main__':
             if env.timestamp >= env.end_time: 
                 break
 
-        
         # episode finishes
         for agent_id, r in agent_reward.items():  # record reward
             episode_rewards[agent_id][episode] = r

@@ -1,10 +1,8 @@
 from copy import deepcopy
 from typing import List
 import torch
-import torch.nn.functional as F
 from torch import nn, Tensor
 from torch.optim import Adam
-import numpy as np
 
 
 class ChargingAgent:
@@ -18,39 +16,15 @@ class ChargingAgent:
         self.critic_optimizer = Adam(self.critic.parameters(), lr=critic_lr)
         self.target_actor = deepcopy(self.actor).to(self.device)
         self.target_critic = deepcopy(self.critic).to(self.device)
-        # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         
-
-    @staticmethod
-    def gumbel_softmax(logits, tau=1.0, eps=1e-20):
-        epsilon = torch.rand_like(logits)
-        logits += -torch.log(-torch.log(epsilon + eps) + eps)
-        probabilities = F.softmax(logits / tau, dim=-1)
-        return probabilities
-
     def action(self, obs, agent_status, model_out=False):
-        # this method is called in the following two cases:
-        # a) interact with the environment
-        # b) calculate action when update actor, where input(obs) is sampled from replay buffer with size:
-        # torch.Size([batch_size, state_dim])
+        """select action for all agents using their actor network"""
         obs = obs.to(self.device)
         logits = self.actor(obs)  # torch.Size([batch_size, action_size])
         
         if not agent_status:
             # Apply masking: setting logits of invalid actions to a large negative value
             logits[:, 0] = -1e10  # Assuming the invalid action corresponds to index 0
-        
-        # action = self.gumbel_softmax(logits)
-        # action = F.gumbel_softmax(logits, hard=True)
-        
-        # # Use tanh activation to ensure the action is in the range [-1, 1]
-        # action_continuous = torch.tanh(logits)
-        # # Convert action values to tensor
-        # action_values_tensor = torch.tensor(self.action_values, device=self.device, dtype=action_continuous.dtype)
-
-        # Find the closest discrete action value
-        # action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
-        # action = action_values_tensor[action_indices]
         
         action = logits
         if model_out:
@@ -59,26 +33,12 @@ class ChargingAgent:
 
     def target_action(self, obs, agent_status):
         """select action for all agents using their target actor network"""
-        # when calculate target critic value in MADDPG,
-        # we use target actor to get next action given next states,
-        # which is sampled from replay buffer with size torch.Size([batch_size, state_dim])
         logits = self.target_actor(obs)  # torch.Size([batch_size, action_size])
         
         if not agent_status:
             # Apply masking: setting logits of invalid actions to a large negative value
             logits[:, 0] = -1e10  # Assuming the invalid action corresponds to index 0
             
-        # action_continuous = torch.tanh(logits)
-        # # Convert action values to tensor
-        # action_values_tensor = torch.tensor(self.action_values, device=self.device, dtype=action_continuous.dtype)
-
-        # # Find the closest discrete action value
-        # action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
-        # action = action_values_tensor[action_indices]
-        
-        
-        # action = self.gumbel_softmax(logits)
-        # action = F.gumbel_softmax(logits, hard=True)
         action = logits
         return action.squeeze(0).detach()
 
@@ -106,6 +66,7 @@ class ChargingAgent:
         torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 0.5)
         self.critic_optimizer.step()
 
+
 class ScaledSigmoid(nn.Module):
     def __init__(self, scale=0.5, shift=0.5):
         super(ScaledSigmoid, self).__init__()
@@ -122,10 +83,10 @@ class MLPNetwork(nn.Module):
         
         self.net = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
-            nn.GroupNorm(1, hidden_dim),
+            # nn.GroupNorm(1, hidden_dim),
             non_linear,
             nn.Linear(hidden_dim, hidden_dim),
-            nn.GroupNorm(1, hidden_dim),
+            # nn.GroupNorm(1, hidden_dim),
             non_linear,
             nn.Linear(hidden_dim, out_dim),
             ScaledSigmoid(scale=output_scale, shift=output_shift) 

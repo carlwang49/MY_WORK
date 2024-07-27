@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from logger_config import configured_logger as logger
 from EVChargingEnv import EVChargingEnv
 from collections import defaultdict
-from ActionSpace import ActionSpace, DiscreteActionSpace, TopLevelActionSpace
+from ActionSpace import ActionSpace, TopLevelActionSpace
 from PriceEnvironment import PriceEnvironment
 from utils import min_max_scaling, standardize
 from dotenv import load_dotenv
@@ -44,7 +44,6 @@ class EVBuildingEnv(EVChargingEnv):
         self.load_dict = self.building_load.set_index('Date')['Total_Power(kWh)'].to_dict()
         self.date_list = [pd.Timestamp(date).to_pydatetime() for date in self.building_load['Date'].values]
         self.original_load = self.get_current_load(start_time)
-        
         self.daily_stats = {}
         self.precompute_daily_stats()
  
@@ -59,8 +58,8 @@ class EVBuildingEnv(EVChargingEnv):
         # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = {f'agent_{i}': ActionSpace(0, 1, (1,)) for i in range(num_agents)}  
         # self.action_spaces = {f'agent_{i}': DiscreteActionSpace(self.action_values) for i in range(num_agents)}  
-        self.charging_action_spaces = {f'agent_{i}': ActionSpace(0.4, 1, (1,)) for i in range(num_agents)}
-        self.discharging_action_spaces = {f'agent_{i}': ActionSpace(0, 0.6, (1,)) for i in range(num_agents)}
+        self.charging_action_spaces = {f'agent_{i}': ActionSpace(0.5, 1, (1,)) for i in range(num_agents)}
+        self.discharging_action_spaces = {f'agent_{i}': ActionSpace(0, 0.5, (1,)) for i in range(num_agents)}
         
         # Initialize top level action space
         self.top_level_action_space = TopLevelActionSpace([0, 1])
@@ -68,7 +67,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.dones = {agent_id: False for agent_id in self.agents}
         self.infos = {}
         self.inactive_observation = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
-        self.top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
+        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
         
         # # Calculate the average of the top 10% of historical peak electricity consumption
         # sorted_load_history = self.building_load['Total_Power(kWh)'].sort_values(ascending=False)
@@ -81,7 +80,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.min_load_diff = self.curr_valley_load - self.curr_mean
         self.max_load_diff = self.curr_peak_load - self.curr_mean
 
-        # Store the building load history
+        
         self.load_history = [] 
         
         # Initialize EV data for each charging pile
@@ -97,7 +96,26 @@ class EVBuildingEnv(EVChargingEnv):
                 'time_before_soc_min': None,
             } for i in range(num_agents)
         }
+        
+        # Initialize the charging records and SoC history
+        self.charging_records = pd.DataFrame(columns=['requestID', 
+                                                      'arrival_time', 
+                                                      'departure_time', 
+                                                      'initial_soc', 
+                                                      'departure_soc',
+                                                      'final_soc', 
+                                                      'charging_power', 
+                                                      'charging_time']) 
+        
+        # Initialize a DataFrame to store SoC history
+        self.soc_history = pd.DataFrame(columns=['requestID', 
+                                                 'current_time', 
+                                                 'soc', 
+                                                 'SoC_upper_bound', 
+                                                 'SoC_lower_bound'])
+        
     
+    """get the current building load"""
     def get_current_load(self, timestamp):
         return self.load_dict[timestamp]
     
@@ -107,7 +125,6 @@ class EVBuildingEnv(EVChargingEnv):
         building_load.sort_values(by='Date', inplace=True)
         return building_load
 
-    
     """get observations for each agent in the environment"""
     def observation_space(self, agent_id):
         return self.observation_spaces[agent_id]
@@ -123,7 +140,7 @@ class EVBuildingEnv(EVChargingEnv):
         return self.discharging_action_spaces[agent_id]
     
     def get_top_level_observation_space(self):
-        return self.top_observation
+        return self.inactive_top_observation
     
     def get_top_level_action_space(self):
         return self.top_level_action_space
@@ -210,10 +227,10 @@ class EVBuildingEnv(EVChargingEnv):
         # Get the time interval before EV's leaving time
         soc_diff = self.ev_data[agent_id]['departure_soc'] - self.ev_data[agent_id]['soc']
         hour_diff = self.ev_data[agent_id]['departure_time'].hour - current_time.hour if self.ev_data[agent_id]['departure_time'].hour - current_time.hour > 0 else 1
-        emergency = round(soc_diff / hour_diff, 2)
+        emergency = soc_diff / hour_diff
         
         # Get the current electricity price
-        current_price = round(self.price_env.get_current_price(current_time), 2)
+        current_price = self.price_env.get_current_price(current_time)
         
         # Get agent status
         agent_status = self.agents_status[agent_id]
@@ -227,7 +244,7 @@ class EVBuildingEnv(EVChargingEnv):
         """get the global state information"""
         # If the current time is the start time, return the initial state
         if current_time == self.start_time:
-            return self.top_observation
+            return self.inactive_top_observation
         
         # Get the difference between the current building load and the average building load
         building_load = self.get_current_load(current_time)
@@ -235,7 +252,6 @@ class EVBuildingEnv(EVChargingEnv):
         
         # Get the current electricity price
         current_price = self.price_env.get_current_price(current_time)
-        # current_price = round(self.price_env.get_current_price(current_time), 2)
         
         # get current parking number
         current_parking_number = self.current_parking_number
@@ -256,10 +272,12 @@ class EVBuildingEnv(EVChargingEnv):
         # Reset the timestamp to the start time
         self.timestamp = self.start_time # Reset the timestamp to the start time
         
-        # peak and valley load at current day
-        self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_past_same_date_peak_and_valley_load(self.timestamp)
-        self.min_load_diff = self.curr_valley_load - self.curr_mean
-        self.max_load_diff = self.curr_peak_load - self.curr_mean
+        # init the maximum and minimum SoC
+        self.SoC_upper_bound_dict = {f'agent_{i}': 0 for i in range(self.num_agents)}
+        self.Soc_lower_bound_dict = {f'agent_{i}': 0 for i in range(self.num_agents)}
+        
+        # Initialize PriceEnvironment
+        self.price_env = PriceEnvironment(Price_file_path, self.start_time, self.end_time)
         
         # Initialize building load
         self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
@@ -273,27 +291,36 @@ class EVBuildingEnv(EVChargingEnv):
         # Initialize the observation space and action space for each agent
         self.agents = [f'agent_{i}' for i in range(self.num_agents)]
         self.agents_status = {f'agent_{i}': False for i in range(self.num_agents)}
+        self.current_parking = np.zeros(self.num_agents, dtype=bool)
+        self.current_parking_number = 0  # Number of currently connected charging piles
         
         # Initialize the observation space and action space for each agent
         self.observation_spaces = {f'agent_{i}': np.zeros(6) for i in range(self.num_agents)} # SoC, building load, P_max_tk, P_min_tk
         # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = {f'agent_{i}': ActionSpace(0, 1, (1,)) for i in range(self.num_agents)}  
         # self.action_spaces = {f'agent_{i}': DiscreteActionSpace(self.action_values) for i in range(self.num_agents)}  
+        self.charging_action_spaces = {f'agent_{i}': ActionSpace(0.4, 1, (1,)) for i in range(self.num_agents)}
+        self.discharging_action_spaces = {f'agent_{i}': ActionSpace(0, 0.6, (1,)) for i in range(self.num_agents)}
         
         # Initialize top level action space
-        self.top_observation_space = np.zeros(6)
         self.top_level_action_space = TopLevelActionSpace([0, 1])
-        
+
         self.dones = {agent_id: False for agent_id in self.agents}
         self.infos = {}
         self.inactive_observation = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
-        self.top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
+        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
         
         self.current_parking = np.zeros(self.num_agents, dtype=bool)  # Whether the charging pile is connected
         self.current_parking_number = 0  # Number of currently connected charging piles
         self.SoC_upper_bound_list = [0 for _ in range(self.num_agents)]  # Upper bound of SoC
         self.SoC_lower_bound_list = [0 for _ in range(self.num_agents)]  # Lower bound of SoC
         
+        # peak and valley load at current day
+        self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_past_same_date_peak_and_valley_load(self.timestamp)
+        self.min_load_diff = self.curr_valley_load - self.curr_mean
+        self.max_load_diff = self.curr_peak_load - self.curr_mean
+        
+        # Store the building load history
         self.load_history = [] 
         
         # Initialize EV data for each charging pile
@@ -337,50 +364,11 @@ class EVBuildingEnv(EVChargingEnv):
         return observations, global_observation
     
     
-    # def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict, top_level_action):
-    #     """calculate the reward for each agent and the global reward"""
-        
-    #     def log_scale_reward(reward, base=10):
-    #         return np.log1p(abs(reward)) / np.log(base + 1e-6) * np.sign(reward)
-        
-    #     flag = 1 if top_level_action == 0 else -1
-        
-    #     # Initialize the rewards
-    #     global_reward = 0
-    #     rewards = {agent_id: 0 for agent_id in self.agents}
-        
-    #     current_price = self.price_env.get_current_price(self.timestamp) # Get the current electriity price
-    #     total_action_impact = sum(P_tk_dict.values()) # Get the total action impact
-    #     new_load = original_load + total_action_impact # Calculate the new building load
-    #     load_diff = self.curr_mean - new_load 
-    #     penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
-        
-    #     # Calculate the global reward
-    #     global_reward = beta * (-np.log(1 + abs(load_diff))) - (1 - beta) * np.log(1 + penalty)
-    #     # if top_level_action == 0 and original_load > self.curr_mean:
-    #     #     global_reward = -10
-    #     # elif top_level_action == 1 and original_load < self.curr_mean:
-    #     #     global_reward = -10
-        
-    #     # Calculate the local reward for each agent
-    #     for agent_id in active_agent_ids:
-    #         P_tk = P_tk_dict[agent_id]
-    #         r_tk = -P_tk * current_price
-    #         r_soc = abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
-    #         local_reward = alpha * r_tk - (1-alpha) * r_soc
-    #         # local_reward = r_tk
-    #         rewards[agent_id] = local_reward
-            
-    #     # global_reward = flag * total_action_impact
-    #     return rewards, global_reward
-    
-    def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict, top_level_action):
+    def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict):
         """Calculate the reward for each agent and the global reward"""
         
         def log_scale_reward(reward, base=10):
             return np.log1p(abs(reward)) / np.log(base + 1e-6) * np.sign(reward)
-        
-        flag = 1 if top_level_action == 0 else -1
         
         # Initialize the rewards
         global_reward = 0
@@ -389,12 +377,12 @@ class EVBuildingEnv(EVChargingEnv):
         current_price = self.price_env.get_current_price(self.timestamp)  # Get the current electricity price
         total_action_impact = sum(P_tk_dict.values())  # Get the total action impact
         new_load = original_load + total_action_impact  # Calculate the new building load
-        load_diff = abs(self.curr_mean - new_load) 
+        load_diff = self.curr_mean - new_load
         penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
         
         # Calculate the global reward
-        global_reward = -current_price * new_load - penalty
-        global_reward = log_scale_reward(global_reward) * beta - (1 - beta) * log_scale_reward(load_diff)
+        price_cost = -current_price * new_load - penalty
+        global_reward = log_scale_reward(price_cost) * beta + (1 - beta) * log_scale_reward(load_diff * total_action_impact) 
         
         # Calculate the local reward for each agent
         for agent_id in active_agent_ids:
@@ -430,14 +418,7 @@ class EVBuildingEnv(EVChargingEnv):
             
             action = actions[agent_id] # Get the action for the current agent
             P_max_tk, P_min_tk, SoC_lower_bound, SoC_upper_bound = self.get_deb_constraints(agent_id, current_time + timedelta(hours=1)) # Get the maximum and minimum power output
-            
-            # if top_level_action == 0 and P_min_tk < 0: # Charging mode
-            #     P_min_tk = 0
-            # elif top_level_action == 1 and P_min_tk < 0 and P_max_tk > 0: # Discharging mode
-            #     P_max_tk = 0
-                
             P_tk = action * (P_max_tk - P_min_tk) + P_min_tk # Calculate the power output based on the action
-            # P_tk = 0 if top_level_action == -1 else P_tk
             soc = (self.ev_data[agent_id]['soc'] * self.C_k + P_tk * (time_interval / 60)) / self.C_k 
             self.ev_data[agent_id]['soc'] = soc
             self.ev_data[agent_id]['soc'] = np.clip(soc, self.soc_min, self.soc_max)  # Ensure SoC is within a reasonable range
@@ -457,7 +438,7 @@ class EVBuildingEnv(EVChargingEnv):
                 'total_action_impact': total_action_impact  
             })
 
-        rewards, global_reward = self.calculate_reward(self.original_load, active_agent_ids, P_tk_dict, top_level_action)
+        rewards, global_reward = self.calculate_reward(self.original_load, active_agent_ids, P_tk_dict)
 
         next_observations = {
             agent: self.observe(agent, current_time + timedelta(hours=1)) 
@@ -542,7 +523,6 @@ class EVBuildingEnv(EVChargingEnv):
                 'SoC_upper_bound': self.SoC_upper_bound_dict[agent_id], # Add the upper bound of SoC to the soc_history DataFrame
                 'SoC_lower_bound': self.Soc_lower_bound_dict[agent_id]  # Add the lower bound of SoC to the soc_history DataFrame
             })
-            
             
             # Reset EV data for the selected charging pile
             self.ev_data[agent_id] = {'requestID': None, 
