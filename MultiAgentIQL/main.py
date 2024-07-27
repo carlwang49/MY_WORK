@@ -90,27 +90,25 @@ def train_QL_agents(n_agents, num_episodes, eps_decay, eps_min, step_size, gamma
             
             # add EVs to the environment, if there are EVs that have arrived at the current time
             current_requests = ev_request_dict.get(env.timestamp, []) # get the EVs that have arrived at the current time
-            if current_requests:
-                for ev in current_requests:
-                    env.add_ev(ev['requestID'], 
-                            ev['arrival_time'], 
-                            ev['departure_time'], 
-                            ev['initial_soc'], 
-                            ev['departure_soc'])
-                    
-                    env.current_parking_number += 1 # increase the number of EVs in the environment
+            for ev in current_requests:
+                env.add_ev(ev['requestID'], 
+                        ev['arrival_time'], 
+                        ev['departure_time'], 
+                        ev['initial_soc'], 
+                        ev['departure_soc'])
+                
+                env.current_parking_number += 1 # increase the number of EVs in the environment
                         
             # Remove EVs that departed at the current time
             current_departures = ev_departure_dict.get(env.timestamp, [])
-            if current_departures:
-                for ev in current_departures:
-                    request_id = ev['requestID']
-                    for agent_id, data in env.ev_data.items():
-                        if data['requestID'] == request_id:
-                            env.remove_ev(agent_id)
-                            env.current_parking_number -= 1
-                            break 
-                        
+            for ev in current_departures:
+                request_id = ev['requestID']
+                for agent_id, data in env.ev_data.items():
+                    if data['requestID'] == request_id:
+                        env.remove_ev(agent_id)
+                        env.current_parking_number -= 1
+                        break 
+                    
             steps += 1
             actions = []
             for i in range(n_agents):

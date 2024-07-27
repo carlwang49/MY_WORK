@@ -5,6 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 import sys
 from EVBuildingEnv import EVBuildingEnv
+from logger_config import configured_logger as logger
 from utils.plot_results import plot_scores_epsilon
 import torch
 import torch.optim as optim
@@ -12,22 +13,47 @@ from utilities import prepare_ev_request_data, prepare_ev_departure_data, create
 from ReplayBuffer import ReplayBuffer
 from QNet import QNet   
 from agent import train, test
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+NUMBER_OF_EPISODES = int(os.getenv('NUMBER_OF_EPISODES'))
+LEARN_INTERVAL = int(os.getenv('LEARN_INTERVAL'))
+RANDOM_STEPS = int(float(os.getenv('RANDOM_STEPS')))
+TAU = float(os.getenv('TAU'))
+GAMMA = float(os.getenv('GAMMA'))
+AGENT_BUFFER_CAPACITY = int(float(os.getenv('AGENT_BUFFER_CAPACITY')))
+AGENT_BATCH_SIZE = int(os.getenv('AGENT_BATCH_SIZE'))
+LEARNING_RATE_ACTOR = float(os.getenv('LEARNING_RATE_ACTOR'))
+LEARNING_RATE_CRITIC = float(os.getenv('LEARNING_RATE_CRITIC'))
+EPSILON = float(os.getenv('EPSILON'))
+
 
 # Import the environment and plotting functions
 sys.path.insert(0,'./env')
 sys.path.insert(0,'./utils')
 
-# Define the start and end date of the EV request data
-start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-12-31'
+alpha = ALPHA = float(os.getenv('REWARD_ALPHA'))
+beta = BETA = float(os.getenv('REWARD_BETA'))
 
-# Define the start and end time of the EV request data
-start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 12, 31)
+# Define the start and end date of the EV request data
+start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
+end_date = END_DATE = os.getenv('END_DATETIME', '2018-10-01')
+
+# Define the start and end date of the EV request data without year
+start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+
+# Define the start and end datetime of the EV request data
+start_time = START_TIME = datetime.strptime(start_date, '%Y-%m-%d')
+end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
 # Define the number of agents
-num_agents = NUM_AGENTS = 10
-parking_data_path = PARKING_DATA_PATH = '../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31.csv'
+num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
+dir_name = DIR_NAME = 'VDN-MARL'
+
+# Define the path to the EV request data
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 
 def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval, max_episodes, max_epsilon,
@@ -75,26 +101,24 @@ def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval,
                 
                 # add EVs to the environment, if there are EVs that have arrived at the current time
                 current_requests = ev_request_dict.get(env.timestamp, []) # get the EVs that have arrived at the current time
-                if current_requests:
-                    for ev in current_requests:
-                        env.add_ev(ev['requestID'], 
-                                ev['arrival_time'], 
-                                ev['departure_time'], 
-                                ev['initial_soc'], 
-                                ev['departure_soc'])
-                        
-                        env.current_parking_number += 1 # increase the number of EVs in the environment
+                for ev in current_requests:
+                    env.add_ev(ev['requestID'], 
+                            ev['arrival_time'], 
+                            ev['departure_time'], 
+                            ev['initial_soc'], 
+                            ev['departure_soc'])
+                    
+                    env.current_parking_number += 1 # increase the number of EVs in the environment
                             
                 # Remove EVs that departed at the current time
                 current_departures = ev_departure_dict.get(env.timestamp, [])
-                if current_departures:
-                    for ev in current_departures:
-                        request_id = ev['requestID']
-                        for agent_id, data in env.ev_data.items():
-                            if data['requestID'] == request_id:
-                                env.remove_ev(agent_id)
-                                env.current_parking_number -= 1
-                                break 
+                for ev in current_departures:
+                    request_id = ev['requestID']
+                    for agent_id, data in env.ev_data.items():
+                        if data['requestID'] == request_id:
+                            env.remove_ev(agent_id)
+                            env.current_parking_number -= 1
+                            break 
 
                 step_counter += 1
                 action, hidden = q.sample_action(torch.Tensor(state).unsqueeze(0), hidden, epsilon)
@@ -122,24 +146,29 @@ def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval,
             q_target.load_state_dict(q.state_dict())
 
         if (episode_i + 1) % log_interval == 0:
-            test_score = test(test_env, test_episodes, q, ev_request_dict, ev_departure_dict)
-            print("#{:<10}/{} episodes, test score: {:.1f} n_buffer : {}, eps : {:.2f}"
-                  .format(episode_i, max_episodes, test_score, memory.size(), epsilon))
-
-    
+            # test_score = test(test_env, test_episodes, q, ev_request_dict, ev_departure_dict)
+            # print("#{:<10}/{} episodes, test score: {:.1f} n_buffer : {}, eps : {:.2f}"
+            #       .format(episode_i, max_episodes, test_score, memory.size(), epsilon))
+            
+            # Print the episode reward
+            rewards = 0
+            for i in range(n_agents):
+                rewards += sum(rewards_temp[i])
+            logger.bind(console=True).info(f'Episode {episode_i} - Total reward: {rewards}')
+            
     return q, episode_rewards, epsilon_history, env
 
 
 if __name__ == '__main__':
     
     kwargs = {'env_name': 'dummy',
-            'lr': 0.001,
-            'batch_size': 1024,
-            'gamma': 0.99,
+            'lr': LEARNING_RATE_ACTOR,
+            'batch_size': AGENT_BATCH_SIZE,
+            'gamma': GAMMA,
             'buffer_limit': 50000, #50000
             'update_target_interval': 20,
-            'log_interval': 100,
-            'max_episodes': 3000,
+            'log_interval': LEARN_INTERVAL,
+            'max_episodes': NUMBER_OF_EPISODES,
             'max_epsilon': 0.9,
             'min_epsilon': 0.25,
             'test_episodes': 5,
@@ -149,7 +178,7 @@ if __name__ == '__main__':
             'recurrent': False}
     
     VDNagent, reward_history, epsilon_history, env = train_VDN_agent(**kwargs)
-    result_dir = create_result_dir('VDN')
+    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}')
     plot_scores_epsilon(reward_history, epsilon_history, result_dir, moving_avg_window = 50)
     
     
