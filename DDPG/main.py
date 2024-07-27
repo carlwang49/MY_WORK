@@ -14,27 +14,30 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-# Define the start and end datetime of the EV request data
-start_datetime = datetime(2018, 7, 1)
-end_datetime = datetime(2018, 10, 1)
-
 # Define the start and end date of the EV request data
-start_date = START_DATE = str(start_datetime.date())
-end_date = END_DATE = str(end_datetime.date())
+start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
+end_date = END_DATE = os.getenv('END_DATETIME', '2018-10-01')
 
-# Define the start and end time of the EV request data
-start_time = START_TIME = start_datetime
-end_time = END_TIME = end_datetime
+# Define the start and end date of the EV request data without year
+start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+
+# Define the start and end datetime of the EV request data
+start_time = START_TIME = datetime.strptime(start_date, '%Y-%m-%d')
+end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
 # Define the number of agents
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
-parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{num_agents}.csv'
+
+# Define the path to the EV request data
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define hyperparameters
-random_steps = RANDOM_STEPS  = 25e3  # Take the random actions in the beginning for the better exploration
-update_freq = UPDATE_FREQ = 50  # Take 50 steps,then update the networks 50 times
+random_steps = RANDOM_STEPS  = int(float(os.getenv('RANDOM_STEPS')))  # Take the random actions in the beginning for the better exploration
+episode_num = EPISODE_NUM = int(os.getenv('NUMBER_OF_EPISODES'))
+update_freq = UPDATE_FREQ = int(os.getenv('LEARN_INTERVAL'))
 episode_rewards = EPISODE_REWARDS = defaultdict(int)  # Record the rewards during the evaluating
-episode_num = EPISODE_NUM = 3000
+
 
 if __name__ == '__main__':
     
@@ -44,12 +47,12 @@ if __name__ == '__main__':
     
     # create environment
     env = EVBuildingEnv(num_agents, start_time, end_time)
-    env_evaluate = EVBuildingEnv(num_agents, start_time, end_time)  # When evaluating the policy, we need to rebuild an environment
+    # env_evaluate = EVBuildingEnv(num_agents, start_time, end_time)  # When evaluating the policy, we need to rebuild an environment
     
-    # Set random seed
-    seed = 0
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    # # Set random seed
+    # seed = 0
+    # np.random.seed(seed)
+    # torch.manual_seed(seed)
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
@@ -59,9 +62,9 @@ if __name__ == '__main__':
     # create a new folder to save the result
     result_dir = create_result_dir('DDPG') 
 
-    logger.bind(console=True).info("state_dim={}".format(state_dim))
-    logger.bind(console=True).info("action_dim={}".format(action_dim))
-    logger.bind(console=True).info("max_action={}".format(max_action))
+    # logger.bind(console=True).info("state_dim={}".format(state_dim))
+    # logger.bind(console=True).info("action_dim={}".format(action_dim))
+    # logger.bind(console=True).info("max_action={}".format(max_action))
 
     agent = DDPG(state_dim, action_dim, max_action)
     replay_buffer = ReplayBuffer(state_dim, action_dim)
