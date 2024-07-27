@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
+import matplotlib.pyplot as plt
+import pickle
 
 def prepare_ev_request_data(parking_data_path, start_date, end_date):
     """
@@ -44,7 +46,27 @@ def prepare_ev_departure_data(parking_data_path, start_date, end_date):
 
 
 
-def create_result_dir(method_name='EVBuildingEnv'):
+# def create_result_dir(method_name='EVBuildingEnv'):
+#     """
+#     Create a directory for storing results of a method.
+
+#     Args:
+#         method_name (str, optional): The name of the method. Defaults to 'EVBuildingEnv'.
+
+#     Returns:
+#         str: The path of the created result directory.
+#     """
+#     env_dir = os.path.join('../Result', method_name)
+    
+#     if not os.path.exists(env_dir):
+#         os.makedirs(env_dir)
+#     total_files = len([file for file in os.listdir(env_dir)])
+#     result_dir = os.path.join(env_dir, f'{total_files + 1}')
+#     os.makedirs(result_dir)
+    
+#     return result_dir
+
+def create_result_dir(method_name='MADDPG'):
     """
     Create a directory for storing results of a method.
 
@@ -58,8 +80,16 @@ def create_result_dir(method_name='EVBuildingEnv'):
     
     if not os.path.exists(env_dir):
         os.makedirs(env_dir)
-    total_files = len([file for file in os.listdir(env_dir)])
-    result_dir = os.path.join(env_dir, f'{total_files + 1}')
+    
+    # 獲取現有資料夾名稱中的數字
+    existing_dirs = [int(file) for file in os.listdir(env_dir) if file.isdigit()]
+    
+    if existing_dirs:
+        max_dir_num = max(existing_dirs)
+    else:
+        max_dir_num = 0
+    
+    result_dir = os.path.join(env_dir, f'{max_dir_num + 1}')
     os.makedirs(result_dir)
     
     return result_dir
@@ -82,3 +112,54 @@ def min_max_scaling(value, min_val, max_val):
 
 def standardize(value, mean, std):
     return (value - mean) / std
+
+
+def plot_training_results(episode_rewards, args, result_dir):
+    # Calculate the average reward per episode
+    avg_rewards = np.mean(list(episode_rewards.values()), axis=0)
+
+    # Create the figure and axis
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x = range(1, args.episode_num + 1)
+
+    # Plot the average reward
+    ax.plot(x, avg_rewards, label='Average Reward', color='blue', linewidth=2)
+    
+    # Plot the running average reward
+    running_avg_rewards = get_running_reward(avg_rewards)
+    ax.plot(x, running_avg_rewards, label='Running Average Reward', color='orange', linestyle='--', linewidth=2)
+
+    # Customize the plot
+    ax.legend(fontsize=12)
+    ax.set_xlabel('Episode', fontsize=14)
+    ax.set_ylabel('Reward', fontsize=14)
+    ax.set_title('Training Agent Result of GB-MARL', fontsize=16)
+    ax.grid(True)
+    
+    # Save the figure
+    plt.savefig(os.path.join(result_dir, 'training_result_agent_reward_GB-MARL.png'))
+    plt.show()
+    
+
+def plot_global_training_results(episode_global_rewards, args, result_dir):
+    # Create the figure and axis
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x = range(1, args.episode_num + 1)
+
+    # Plot the global reward
+    ax.plot(x, episode_global_rewards, label='Global Reward', color='green', linewidth=2, linestyle=':')
+    
+    # Customize the plot
+    ax.legend(fontsize=12)
+    ax.set_xlabel('Episode', fontsize=14)
+    ax.set_ylabel('Reward', fontsize=14)
+    ax.set_title('Training Global Result of GB-MARL', fontsize=16)
+    ax.grid(True)
+    
+    # Save the figure
+    plt.savefig(os.path.join(result_dir, 'training_result_global_reward_GB-MARL.png'))
+    plt.show()
+    
+    # Save the global rewards to a pickle file
+    with open(os.path.join(result_dir, 'global_reward.pkl'), 'wb') as f:
+        pickle.dump(episode_global_rewards, f)
