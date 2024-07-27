@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
+alpha = ALPHA = float(os.getenv('REWARD_ALPHA'))
+beta = BETA = float(os.getenv('REWARD_BETA'))
+
 # Define the start and end date of the EV request data
 start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
 end_date = END_DATE = os.getenv('END_DATETIME', '2018-10-01')
@@ -60,7 +63,7 @@ if __name__ == '__main__':
     min_action = float(env.action_space.low)
     
     # create a new folder to save the result
-    result_dir = create_result_dir('DDPG') 
+    result_dir = create_result_dir(f'DDPG_alpha{alpha}_beta{beta}_num{NUM_AGENTS}') 
 
     # logger.bind(console=True).info("state_dim={}".format(state_dim))
     # logger.bind(console=True).info("action_dim={}".format(action_dim))
