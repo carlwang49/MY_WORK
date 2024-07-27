@@ -11,7 +11,7 @@ from ChargingAgent import ChargingAgent
 from DischargingAgent import DischargingAgent
 
 
-class MADDPG:
+class GB_MARL:
     def __init__(self, dim_info, top_dim_info, capacity, batch_size, top_level_buffer_capacity, 
                  top_level_batch_size, actor_lr, critic_lr, epsilon, sigma, res_dir):
         """dim_info: dict, key is agent_id, value is a tuple of obs_dim and act_dim"""
@@ -40,7 +40,7 @@ class MADDPG:
         self.batch_size = batch_size # batch size
         self.top_level_batch_size = top_level_batch_size # top level batch size
         self.res_dir = res_dir # result directory
-        self.logger = setup_logger(os.path.join(res_dir, 'maddpg.log')) # initialize the logger
+        self.logger = setup_logger(os.path.join(res_dir, 'GB_MARL.log')) # initialize the logger
 
         
     # def change_top_level_agent_parameter(self, epsilon, sigma_decay):
@@ -114,7 +114,7 @@ class MADDPG:
         return obs, act, reward, next_obs, done, next_act
 
     def select_action(self, obs, global_observation, agents_status):
-        """Select action using MADDPG"""
+        """Select action using GB_MARL"""
         
         top_level_obs = global_observation
         top_level_action = self.top_level_agent.action(torch.from_numpy(top_level_obs).unsqueeze(0).float()) # select top level action

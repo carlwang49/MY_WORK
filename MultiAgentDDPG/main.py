@@ -1,7 +1,6 @@
 import pandas as pd
 import os
 import numpy as np
-import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from MADDPG import MADDPG
 from logger_config import configured_logger as logger
@@ -12,20 +11,20 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-# Define the start and end datetime of the EV request data
-start_datetime = datetime(2018, 7, 1)
-end_datetime = datetime(2018, 10, 1)
+alpha = ALPHA = float(os.getenv('REWARD_ALPHA'))
+beta = BETA = float(os.getenv('REWARD_BETA'))
 
 # Define the start and end date of the EV request data
-start_date = START_DATE = str(start_datetime.date())
-end_date = END_DATE = str(end_datetime.date())
+start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
+end_date = END_DATE = os.getenv('END_DATETIME', '2018-10-01')
 
+# Define the start and end date of the EV request data without year
 start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
 end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
 
-# Define the start and end time of the EV request data
-start_time = START_TIME = start_datetime
-end_time = END_TIME = end_datetime
+# Define the start and end datetime of the EV request data
+start_time = START_TIME = datetime.strptime(start_date, '%Y-%m-%d')
+end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
 # Define the number of agents
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
@@ -34,8 +33,7 @@ num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
-# dir_name = DIR_NAME = 'GB-MARL-Discrete'
-dir_name = DIR_NAME = 'GB-MARL'
+dir_name = DIR_NAME = 'MADDPG'
 
 if __name__ == '__main__':
     
@@ -51,7 +49,6 @@ if __name__ == '__main__':
 
     # create a new folder to save the result
     result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}') 
-    # result_dir = create_result_dir(f'{DIR_NAME}') 
     
     # create MADDPG agent
     maddpg = MADDPG(dim_info, args.buffer_capacity, args.batch_size, args.actor_lr, args.critic_lr, result_dir) 
@@ -113,7 +110,7 @@ if __name__ == '__main__':
                         action[agent_id] = env.action_space(agent_id).sample()
                     else:
                         # if the agent is not connected
-                        action[agent_id] = -1 # set the action to -1
+                        action[agent_id] = -1e10 
             else:
                 action = maddpg.select_action(obs, env.agents_status) # select action using MADDPG
 

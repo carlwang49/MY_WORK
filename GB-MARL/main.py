@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from datetime import datetime, timedelta
-from MADDPG import MADDPG
+from GB_MARL import GB_MARL
 from logger_config import configured_logger as logger
-from maddpg_parameter import parse_args, get_env
+from GB_MARL_parameter import parse_args, get_env
 from utils import (prepare_ev_request_data, create_result_dir, 
                    prepare_ev_departure_data, plot_training_results, 
                    plot_global_training_results)
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # result_dir = create_result_dir(f'{DIR_NAME}') 
     
     # create MADDPG agent
-    maddpg = MADDPG(dim_info, top_dim_info, args.buffer_capacity, args.batch_size, 
+    maddpg = GB_MARL(dim_info, top_dim_info, args.buffer_capacity, args.batch_size, 
                     args.top_level_buffer_capacity, args.top_level_batch_size, args.actor_lr, args.critic_lr, args.epsilon, args.sigma, result_dir) 
 
     step = 0  # global step counter

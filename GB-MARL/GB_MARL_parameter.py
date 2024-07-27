@@ -1,5 +1,5 @@
 import argparse
-from EVBuildingEnvMADDPG import EVBuildingEnv
+from EVBuildingEnvGB_MARL import EVBuildingEnv
 from dotenv import load_dotenv
 import os
 load_dotenv()
