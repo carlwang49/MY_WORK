@@ -312,8 +312,8 @@ class EVBuildingEnv(EVChargingEnv):
         
         self.current_parking = np.zeros(self.num_agents, dtype=bool)  # Whether the charging pile is connected
         self.current_parking_number = 0  # Number of currently connected charging piles
-        self.SoC_upper_bound_list = [0 for _ in range(self.num_agents)]  # Upper bound of SoC
-        self.SoC_lower_bound_list = [0 for _ in range(self.num_agents)]  # Lower bound of SoC
+        # self.SoC_upper_bound_list = [0 for _ in range(self.num_agents)]  # Upper bound of SoC
+        # self.SoC_lower_bound_list = [0 for _ in range(self.num_agents)]  # Lower bound of SoC
         
         # peak and valley load at current day
         self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_past_same_date_peak_and_valley_load(self.timestamp)

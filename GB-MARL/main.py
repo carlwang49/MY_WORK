@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # result_dir = create_result_dir(f'{DIR_NAME}') 
     
     # create MADDPG agent
-    maddpg = GB_MARL(dim_info, top_dim_info, args.buffer_capacity, args.batch_size, 
+    gb_marl = GB_MARL(dim_info, top_dim_info, args.buffer_capacity, args.batch_size, 
                     args.top_level_buffer_capacity, args.top_level_batch_size, args.actor_lr, args.critic_lr, args.epsilon, args.sigma, result_dir) 
 
     step = 0  # global step counter
@@ -72,8 +72,8 @@ if __name__ == '__main__':
     for episode in tqdm(range(args.episode_num)):
         
         # decrease epsilon
-        # maddpg.change_top_level_agent_parameter(args.epsilon * (1 - episode / args.episode_num), args.sigma_decay)
-        # maddpg.top_level_agent.update_target_network(0.1)
+        # gb_marl.change_top_level_agent_parameter(args.epsilon * (1 - episode / args.episode_num), args.sigma_decay)
+        # gb_marl.top_level_agent.update_target_network(0.1)
         
         # reset the timestamp to the start time of the environment
         env.timestamp = env.start_time 
@@ -131,13 +131,13 @@ if __name__ == '__main__':
                         # if the agent is not connected
                         action[agent_id] = -1e10 # set the action to -1
             else:
-                action, top_level_action = maddpg.select_action(obs, global_observation, env.agents_status) # select action using MADDPG
+                action, top_level_action = gb_marl.select_action(obs, global_observation, env.agents_status) # select action using MADDPG
                 # print(f'top_level_action: {top_level_action}, action: {action}')
                 
             next_obs, next_global_observation, reward, global_reward, done, info = env.step(action, top_level_action, env.timestamp)
 
             # add experience to replay buffer
-            maddpg.add(obs, global_observation, action, top_level_action, reward, 
+            gb_marl.add(obs, global_observation, action, top_level_action, reward, 
                        global_reward, next_obs, next_global_observation, done)
             
             # update reward
@@ -148,8 +148,8 @@ if __name__ == '__main__':
             
             # learn from the replay buffer
             if step >= args.random_steps and step % args.learn_interval == 0:  # learn every few steps
-                maddpg.learn(args.batch_size, args.top_level_batch_size, args.gamma, env.agents_status) # learn from the replay buffer
-                maddpg.update_target(args.tau) # update target network
+                gb_marl.learn(args.batch_size, args.top_level_batch_size, args.gamma, env.agents_status) # learn from the replay buffer
+                gb_marl.update_target(args.tau) # update target network
                 
             # update observation
             obs = next_obs
@@ -176,7 +176,7 @@ if __name__ == '__main__':
             logger.bind(console=True).info(message)
             logger.bind(console=True).info(f'global reward: {curr_global_reward}')
 
-    maddpg.save(episode_rewards)  # save model
+    gb_marl.save(episode_rewards)  # save model
     plot_training_results(episode_rewards, args, result_dir)
     plot_global_training_results(episode_global_rewards, args, result_dir)
 

@@ -136,7 +136,6 @@ if __name__ == '__main__':
             if env.timestamp >= env.end_time: 
                 break
 
-        
         # episode finishes
         for agent_id, r in agent_reward.items():  # record reward
             episode_rewards[agent_id][episode] = r

@@ -1,6 +1,5 @@
 from copy import deepcopy
 from typing import List
-
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
@@ -55,7 +54,7 @@ class Agent:
         # action_indices = torch.argmin(torch.abs(action_continuous.unsqueeze(-1) - action_values_tensor.unsqueeze(0)), dim=-1)
         # action = action_values_tensor[action_indices]
         
-        action = torch.tanh(logits)
+        action = torch.sigmoid(logits)
         if model_out:
             return action, logits
         return action
@@ -82,7 +81,7 @@ class Agent:
         
         # action = self.gumbel_softmax(logits)
         # action = F.gumbel_softmax(logits, hard=True)
-        action = torch.tanh(logits)
+        action = torch.sigmoid(logits)
         return action.squeeze(0).detach()
 
     def critic_value(self, state_list: List[Tensor], act_list: List[Tensor]):
