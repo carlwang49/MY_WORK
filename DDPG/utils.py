@@ -86,9 +86,6 @@ def standardize(value, mean, std):
 
 
 def plot_training_results(episode_rewards, episode_num, result_dir):
-    # Ensure episode_rewards is a list of rewards
-    print(episode_rewards)
-    
     # Convert defaultdict to list with default value 0 for missing episodes
     rewards_list = [episode_rewards[i] for i in range(1, episode_num + 1)]
     
