@@ -1,7 +1,7 @@
 from tqdm import tqdm
 import pandas as pd
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from utils.plot_results import plot_scores_epsilon
 from QLearningAgent import QLearningAgent
 from utilities import prepare_ev_request_data, prepare_ev_departure_data, create_result_dir
@@ -87,6 +87,11 @@ def train_QL_agents(n_agents, num_episodes, eps_decay, eps_min, step_size, gamma
         steps = 0
         
         while env.timestamp <= env.end_time: 
+            
+            # skip the time
+            if env.timestamp.hour < 7 or env.timestamp.hour > 23:
+                env.timestamp += timedelta(hours=1)
+                continue
             
             # add EVs to the environment, if there are EVs that have arrived at the current time
             current_requests = ev_request_dict.get(env.timestamp, []) # get the EVs that have arrived at the current time

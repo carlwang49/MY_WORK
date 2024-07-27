@@ -2,6 +2,9 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from logger_config import configured_logger as logger
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 
 building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
@@ -20,12 +23,12 @@ class EVChargingEnv:
         self.timestamp = start_time
         
         # Define charging pile power constraints
-        self.max_charging_power = 120  # kW
-        self.max_discharging_power = -120  # kW
-        self.C_k = 75  # Battery capacity in kWh
-        self.eta = 0.95  # Charging efficiency
-        self.soc_max = 0.8  # Maximum SoC
-        self.soc_min = 0.2  # Minimum SoC
+        self.max_charging_power = int(os.getenv('MAX_CHARGING_POWER', 150))  
+        self.max_discharging_power = int(os.getenv('MAX_DISCHARGING_POWER', -150))  
+        self.C_k = float(os.getenv('BATTERY_CAPACITY', 60))  
+        self.eta = float(os.getenv('CHARGING_EFFICIENCY', 0.95))  
+        self.soc_max = float(os.getenv('SOC_MAX', 0.8))  
+        self.soc_min = float(os.getenv('SOC_MIN', 0.2)) 
         
         
         # Initialize building load

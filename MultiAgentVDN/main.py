@@ -1,6 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 from tqdm import tqdm
 import sys
@@ -97,6 +96,12 @@ def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval,
             env.timestamp = env.start_time 
             
             while env.timestamp <= env.end_time: 
+                
+                # skip the time
+                if env.timestamp.hour < 7 or env.timestamp.hour > 23:
+                    env.timestamp += timedelta(hours=1)
+                    continue
+                
                 current_requests = ev_request_dict.get(env.timestamp, []) # get the EVs that have arrived at the current time
                 
                 # add EVs to the environment, if there are EVs that have arrived at the current time
