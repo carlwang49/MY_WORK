@@ -6,34 +6,46 @@ from utils.plot_results import plot_scores_epsilon
 from QLearningAgent import QLearningAgent
 from utilities import prepare_ev_request_data, prepare_ev_departure_data, create_result_dir
 from EVBuildingEnv import EVBuildingEnv
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # Import the environment and plotting functions
 sys.path.insert(0,'./utils')
 
-# Define the start and end date of the EV request data
-start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-12-31'
+alpha = ALPHA = float(os.getenv('REWARD_ALPHA'))
+beta = BETA = float(os.getenv('REWARD_BETA'))
 
-# Define the start and end time of the EV request data
-start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 12, 31)
+# Define the start and end date of the EV request data
+start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
+end_date = END_DATE = os.getenv('END_DATETIME', '2018-10-01')
+
+# Define the start and end date of the EV request data without year
+start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+
+# Define the start and end datetime of the EV request data
+start_time = START_TIME = datetime.strptime(start_date, '%Y-%m-%d')
+end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
 # Define the number of agents
-num_agents = NUM_AGENTS = 10
-parking_data_path = PARKING_DATA_PATH = '../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31.csv'
+num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
+dir_name = DIR_NAME = 'IQL-MARL'
+
+# Define the path to the EV request data
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 
 # HYPERPARAMETERS
-N_AGENTS = 10
-NUM_EPISODES = 6000
+N_AGENTS = NUM_AGENTS
+NUM_EPISODES = int(os.getenv('NUMBER_OF_EPISODES'))
 EPS_DECAY = 0.9999
 EPS_MIN = 0.3
 STEP_SIZE = 0.1
-GAMMA = 0.99
-MAX_STEPS_DONE = 70
+GAMMA = float(os.getenv('GAMMA'))
 
 
-def train_QL_agents(n_agents, num_episodes, max_steps_done, eps_decay, eps_min, step_size, gamma):
+def train_QL_agents(n_agents, num_episodes, eps_decay, eps_min, step_size, gamma):
 
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
@@ -132,10 +144,10 @@ def train_QL_agents(n_agents, num_episodes, max_steps_done, eps_decay, eps_min, 
 
 
 if __name__ == '__main__':
-    agents, reward_history, epsilon_history, env = train_QL_agents(N_AGENTS, NUM_EPISODES, MAX_STEPS_DONE, EPS_DECAY,
+    agents, reward_history, epsilon_history, env = train_QL_agents(N_AGENTS, NUM_EPISODES, EPS_DECAY,
                                                           EPS_MIN, STEP_SIZE, GAMMA)
     
-    result_dir = create_result_dir('IQL')
+    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}')
     plot_scores_epsilon(reward_history, epsilon_history, result_dir, moving_avg_window = 50)
     
     # save soc history and charging records
