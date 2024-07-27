@@ -63,7 +63,7 @@ if __name__ == '__main__':
     min_action = float(env.action_space.low)
     
     # create a new folder to save the result
-    result_dir = create_result_dir(f'DDPG_alpha{alpha}_beta{beta}_num{NUM_AGENTS}') 
+    result_dir = create_result_dir(f'DDPG_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}') 
 
     # logger.bind(console=True).info("state_dim={}".format(state_dim))
     # logger.bind(console=True).info("action_dim={}".format(action_dim))
