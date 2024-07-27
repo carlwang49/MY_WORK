@@ -34,7 +34,7 @@ num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
-dir_name = DIR_NAME = os.getenv('DIR_NAME', 'MARL')
+dir_name = DIR_NAME = 'MARL'
 
 if __name__ == '__main__':
     
