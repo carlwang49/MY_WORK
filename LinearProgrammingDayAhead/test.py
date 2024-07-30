@@ -7,29 +7,37 @@ warnings.filterwarnings('ignore')
 from scipy.optimize import linprog
 from logger_config import configured_logger as logger
 from utils import create_result_dir, get_num_of_evs_in_each_hours, get_tou_price, get_rtp_price
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 # 設定 contract_capacity 和 capacity_price
-contract_capacity = 300
-capacity_price = 15
+contract_capacity = CONTRACT_CAPACITY = int(os.getenv('CONTRACT_CAPACITY')) 
+capacity_price = CAPACITY_PRICE = float(os.getenv('CAPACITY_PRICE'))
 
 # Define the start and end date of the EV request data
-start_date = START_DATE = '2018-07-01'
-end_date = END_DATE = '2018-08-01'
+start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
+end_date = END_DATE = os.getenv('END_DATETIME', '2018-10-01')
 
-# Define the start and end time of the EV request data
-start_time = START_TIME = datetime(2018, 7, 1)
-end_time = END_TIME = datetime(2018, 8, 1)
+# Define the start and end date of the EV request data without year
+start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
 
-num_agents = NUM_AGENTS = 10
+# Define the start and end datetime of the EV request data
+start_time = START_TIME = datetime.strptime(start_date, '%Y-%m-%d')
+end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
+
+# Define the number of agents
+num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
 
-min_soc = MIN_SOC = 0.2
-max_soc = MAX_SOC = 0.9
-c_k = C_K = 75
-eta = ETA = 0.85
-max_charging_power = MAX_CHARGING_POWER = 120
-max_discharging_power = MAX_DISCHARGING_POWER = -120
+min_soc = MIN_SOC = float(os.getenv('SOC_MIN', 0.2))  
+max_soc = MAX_SOC = float(os.getenv('SOC_MAX', 0.8))  
+c_k = C_K = float(os.getenv('BATTERY_CAPACITY', 60))  
+eta = ETA = float(os.getenv('CHARGING_EFFICIENCY', 0.95))  
+max_charging_power = MAX_CHARGING_POWER = int(os.getenv('MAX_CHARGING_POWER', 150))  
+max_discharging_power = MAX_DISCHARGING_POWER = int(os.getenv('MAX_DISCHARGING_POWER', -150))  
 
 """set the building load time range for the environment"""
 def set_building_time_range(building_load, start_time: datetime, end_time: datetime):
@@ -75,7 +83,7 @@ if __name__ == '__main__':
     total_action_impact = defaultdict(float)
     
     # Create a directory for storing results of the simulation
-    result_dir = create_result_dir(f'DayAheadSchedule_agent{NUM_AGENTS}')
+    result_dir = create_result_dir(f'DayAheadSchedule_{start_date_without_year}_{end_date_without_year}_num{NUM_AGENTS}')
     
     real_time_price = get_rtp_price(start_time, end_time)
     

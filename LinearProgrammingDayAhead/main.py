@@ -83,7 +83,7 @@ if __name__ == '__main__':
     total_action_impact = defaultdict(float)
     
     # Create a directory for storing results of the simulation
-    result_dir = create_result_dir(f'DayAheadSchedule_agent_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}')
+    result_dir = create_result_dir(f'DayAheadSchedule_{start_date_without_year}_{end_date_without_year}_num{NUM_AGENTS}')
     
     real_time_price = get_rtp_price(start_time, end_time)
     
