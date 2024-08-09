@@ -10,7 +10,7 @@ class PriceEnvironment:
         self.real_time_price = \
             self.real_time_price.set_index('datetime').reindex(
                 pd.date_range(start=self.real_time_price['datetime'].min(), 
-                              end=self.real_time_price['datetime'].max(), freq='H')).ffill().reset_index()
+                              end=self.real_time_price['datetime'].max(), freq='h')).ffill().reset_index()
         self.real_time_price.rename(columns={'index': 'datetime'}, inplace=True)
 
         # Convert to dictionary for fast lookup
