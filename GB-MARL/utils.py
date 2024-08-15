@@ -62,7 +62,7 @@ def setup_logger(filename):
     logger.addHandler(handler)
     return logger
 
-
+#### Decrepated ####
 # def create_result_dir(method_name='EVBuildingEnv'):
 #     """
 #     Create a directory for storing results of a method.
@@ -98,7 +98,7 @@ def create_result_dir(method_name='EVBuildingEnv'):
     if not os.path.exists(env_dir):
         os.makedirs(env_dir)
     
-    # 獲取現有資料夾名稱中的數字
+    # get the maximum directory number
     existing_dirs = [int(file) for file in os.listdir(env_dir) if file.isdigit()]
     
     if existing_dirs:
@@ -110,7 +110,6 @@ def create_result_dir(method_name='EVBuildingEnv'):
     os.makedirs(result_dir)
     
     return result_dir
-
 
 
 def get_running_reward(arr: np.ndarray, window=100):

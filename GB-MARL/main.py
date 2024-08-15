@@ -29,7 +29,7 @@ end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
 # Test data
 test_start_date = TEST_START_DATE = os.getenv('TEST_START_DATETIME', '2018-10-01')
-test_end_date = TEST_END_DATE = os.getenv('TEST_END_DATETIME', '2018-10-07')
+test_end_date = TEST_END_DATE = os.getenv('TEST_END_DATETIME', '2018-10-08')
 test_start_time = TEST_START_TIME = datetime.strptime(test_start_date, '%Y-%m-%d')
 test_end_time = TEST_END_TIME = datetime.strptime(test_end_date, '%Y-%m-%d')
 
