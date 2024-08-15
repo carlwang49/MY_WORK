@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import random
+import torch
 
 def prepare_ev_request_data(parking_data_path, start_date, end_date):
     """
@@ -113,3 +115,11 @@ def plot_training_results(episode_rewards, episode_num, result_dir):
     # Save the figure
     plt.savefig(os.path.join(result_dir, 'training_result_DDPG.png'))
     plt.show()
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
