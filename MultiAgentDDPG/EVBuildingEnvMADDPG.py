@@ -4,8 +4,7 @@ from datetime import datetime, timedelta
 from logger_config import configured_logger as logger
 from EVChargingEnv import EVChargingEnv
 from collections import defaultdict
-from gym.spaces import Box, Discrete
-from ActionSpace import ActionSpace, DiscreteActionSpace
+from ActionSpace import ActionSpace
 from PriceEnvironment import PriceEnvironment
 from utils import min_max_scaling, standardize
 from dotenv import load_dotenv

@@ -3,6 +3,8 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 import pickle
+import random
+import torch
 
 def prepare_ev_request_data(parking_data_path, start_date, end_date):
     """
@@ -45,7 +47,7 @@ def prepare_ev_departure_data(parking_data_path, start_date, end_date):
     return ev_departure_dict
 
 
-
+#### Decrepated ####
 # def create_result_dir(method_name='EVBuildingEnv'):
 #     """
 #     Create a directory for storing results of a method.
@@ -66,6 +68,7 @@ def prepare_ev_departure_data(parking_data_path, start_date, end_date):
     
 #     return result_dir
 
+
 def create_result_dir(method_name='MADDPG'):
     """
     Create a directory for storing results of a method.
@@ -81,7 +84,7 @@ def create_result_dir(method_name='MADDPG'):
     if not os.path.exists(env_dir):
         os.makedirs(env_dir)
     
-    # 獲取現有資料夾名稱中的數字
+    # get the maximum directory number
     existing_dirs = [int(file) for file in os.listdir(env_dir) if file.isdigit()]
     
     if existing_dirs:
@@ -163,3 +166,11 @@ def plot_global_training_results(episode_global_rewards, args, result_dir):
     # Save the global rewards to a pickle file
     with open(os.path.join(result_dir, 'global_reward.pkl'), 'wb') as f:
         pickle.dump(episode_global_rewards, f)
+        
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)

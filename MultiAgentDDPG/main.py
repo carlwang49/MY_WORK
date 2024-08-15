@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from MADDPG import MADDPG
 from logger_config import configured_logger as logger
 from maddpg_parameter import parse_args, get_env
-from utils import prepare_ev_request_data, create_result_dir, prepare_ev_departure_data, plot_training_results
+from utils import prepare_ev_request_data, create_result_dir, prepare_ev_departure_data, plot_training_results, set_seed
 from tqdm import tqdm
 from dotenv import load_dotenv
 import os
@@ -26,6 +26,12 @@ end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
 start_time = START_TIME = datetime.strptime(start_date, '%Y-%m-%d')
 end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
+# Test data
+test_start_date = TEST_START_DATE = os.getenv('TEST_START_DATETIME', '2018-10-01')
+test_end_date = TEST_END_DATE = os.getenv('TEST_END_DATETIME', '2018-10-08')
+test_start_time = TEST_START_TIME = datetime.strptime(test_start_date, '%Y-%m-%d')
+test_end_time = TEST_END_TIME = datetime.strptime(test_end_date, '%Y-%m-%d')
+
 # Define the number of agents
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 
@@ -33,9 +39,12 @@ num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
-dir_name = DIR_NAME = 'MADDPG'
+dir_name = DIR_NAME = 'MADDPG-TEST'
 
 if __name__ == '__main__':
+    
+    # set seed
+    set_seed(42)
     
     # parse arguments
     args = parse_args()
@@ -164,4 +173,62 @@ if __name__ == '__main__':
     load_history_df.to_csv(load_history_file, index=False)
     
     
+    # ==========================
+    # Execute testing phase
+    # ==========================
     
+    testing_ev_request_dict = prepare_ev_request_data(parking_data_path, test_start_date, test_end_date)
+    testing_ev_departure_dict = prepare_ev_departure_data(parking_data_path, test_start_date, test_end_date)
+    
+    # Create environment for testing (September 1st to September 7th)
+    test_env, _ = get_env(num_agents, test_start_time, test_end_time)
+
+    # Load the trained model
+    loaded_model = MADDPG.load(
+                        dim_info=dim_info,
+                        file=os.path.join(result_dir, 'model.pt')
+                    )
+
+    # Initialize testing variables
+    test_results = []
+    obs = test_env.reset()
+    
+    while test_env.timestamp <= test_env.end_time:
+        if test_env.timestamp.hour < 7 or test_env.timestamp.hour > 23:
+            test_env.timestamp += timedelta(hours=1)
+            continue
+        
+        current_requests = testing_ev_request_dict.get(test_env.timestamp, [])
+        for ev in current_requests:
+            test_env.add_ev(ev['requestID'], 
+                            ev['arrival_time'], 
+                            ev['departure_time'], 
+                            ev['initial_soc'], 
+                            ev['departure_soc'])
+            test_env.current_parking_number += 1
+        
+        current_departures = testing_ev_departure_dict.get(test_env.timestamp, [])
+        for ev in current_departures:
+            for agent_id, data in test_env.ev_data.items():
+                if ev['requestID'] == data['requestID']:
+                    test_env.remove_ev(agent_id)
+                    test_env.current_parking_number -= 1
+        
+        action = loaded_model.select_action(obs, test_env.agents_status) 
+        next_obs, reward, done, info = test_env.step(action, test_env.timestamp)
+
+        obs = next_obs
+
+    
+    # Save testing soc history and charging records
+    test_soc_history_file = f'{result_dir}/test_soc_history.csv'
+    test_charging_records_file = f'{result_dir}/test_charging_records.csv'
+    test_env.soc_history.to_csv(test_soc_history_file, index=False)
+    test_env.charging_records.to_csv(test_charging_records_file, index=False)
+    
+    # Save testing load history
+    test_load_history_df = pd.DataFrame(test_env.load_history)
+    test_load_history_file = f'{result_dir}/test_building_loading_history.csv'
+    test_load_history_df.to_csv(test_load_history_file, index=False)
+    
+    print(f'Test results and histories saved to {result_dir}')

@@ -394,7 +394,7 @@ class EVBuildingEnv(EVChargingEnv):
             
         return rewards, global_reward
 
-    def step(self, actions, top_level_action, current_time: datetime, time_interval: int = 60):
+    def step(self, actions, current_time: datetime, time_interval: int = 60):
         """take a step in the environment"""
         
         # Initialize the rewards, dones, infos, and observations

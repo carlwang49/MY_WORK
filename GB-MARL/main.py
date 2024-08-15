@@ -143,7 +143,7 @@ if __name__ == '__main__':
                 action, top_level_action = gb_marl.select_action(obs, global_observation, env.agents_status) # select action using MADDPG
                 # print(f'top_level_action: {top_level_action}, action: {action}')
                 
-            next_obs, next_global_observation, reward, global_reward, done, info = env.step(action, top_level_action, env.timestamp)
+            next_obs, next_global_observation, reward, global_reward, done, info = env.step(action, env.timestamp)
 
             # add experience to replay buffer
             gb_marl.add(obs, global_observation, action, top_level_action, reward, 
