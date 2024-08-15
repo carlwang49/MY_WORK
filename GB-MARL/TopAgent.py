@@ -13,16 +13,6 @@ class TopAgent:
         self.critic_optimizer = Adam(self.critic.parameters(), lr=critic_lr) # critic optimizer
         self.target_actor = deepcopy(self.actor).to(self.device) # target actor
         self.target_critic = deepcopy(self.critic).to(self.device) # target critic
-        # self.epsilon = epsilon
-        # self.sigma = sigma
-        # self.update_target_network(1.0)
-        
-    # def update_target_network(self, tau):
-    #     """Update the target network"""
-    #     for target_param, param in zip(self.target_actor.parameters(), self.actor.parameters()):
-    #         target_param.data.copy_(tau * param.data + (1.0 - tau) * target_param.data)
-    #     for target_param, param in zip(self.target_critic.parameters(), self.critic.parameters()):
-    #         target_param.data.copy_(tau * param.data + (1.0 - tau) * target_param.data)
     
     def action(self, obs, model_out=False):
         """Return the action of the agent"""
@@ -68,20 +58,6 @@ class TopAgent:
 
 
 class MLPNetwork(nn.Module):
-    # def __init__(self, in_dim, out_dim, hidden_dim=64):
-    #     super(MLPNetwork, self).__init__() # inherit the properties of the parent class
-
-    #     self.net = nn.Sequential(
-    #         nn.Linear(in_dim, hidden_dim),
-    #         nn.LeakyReLU(),
-    #         nn.Linear(hidden_dim, hidden_dim),
-    #         nn.LeakyReLU(),
-    #         nn.Linear(hidden_dim, hidden_dim),
-    #         nn.LeakyReLU(),
-    #         nn.Linear(hidden_dim, out_dim),
-    #         nn.Sigmoid()
-    #     ).apply(self.init)
-        
     def __init__(self, in_dim, out_dim, hidden_dim=64, non_linear=nn.ReLU()):
         super(MLPNetwork, self).__init__()
         

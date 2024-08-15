@@ -83,10 +83,10 @@ class MLPNetwork(nn.Module):
         
         self.net = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
-            # nn.GroupNorm(1, hidden_dim),
+            nn.GroupNorm(1, hidden_dim),
             non_linear,
             nn.Linear(hidden_dim, hidden_dim),
-            # nn.GroupNorm(1, hidden_dim),
+            nn.GroupNorm(1, hidden_dim),
             non_linear,
             nn.Linear(hidden_dim, out_dim),
             ScaledSigmoid(scale=output_scale, shift=output_shift) 

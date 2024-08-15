@@ -4,6 +4,8 @@ import os
 import logging
 import matplotlib.pyplot as plt
 import pickle
+import random
+import torch
 
 def prepare_ev_request_data(parking_data_path, start_date, end_date):
     """
@@ -179,3 +181,11 @@ def plot_global_training_results(episode_global_rewards, args, result_dir):
     # Save the global rewards to a pickle file
     with open(os.path.join(result_dir, 'global_reward.pkl'), 'wb') as f:
         pickle.dump(episode_global_rewards, f)
+        
+        
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)

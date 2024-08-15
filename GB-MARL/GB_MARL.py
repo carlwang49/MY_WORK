@@ -17,8 +17,7 @@ class GB_MARL:
         """dim_info: dict, key is agent_id, value is a tuple of obs_dim and act_dim"""
         
         # Top level agent
-        top_level_obs_dim = top_dim_info[0] # top level agent observation dimension is the sum of all agents' observation dimension
-        top_level_act_dim = top_dim_info[1] # top level agent action dimension
+        top_level_obs_dim, top_level_act_dim = top_dim_info[0], top_dim_info[1] # observation and action dimension of the top level agent
         self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr, epsilon, sigma) # initialize the top level agent
         self.top_level_buffer = TopBuffer(top_level_buffer_capacity, top_level_obs_dim, top_level_act_dim, 'cuda') # initialize the top level buffer
         
@@ -42,32 +41,24 @@ class GB_MARL:
         self.res_dir = res_dir # result directory
         self.logger = setup_logger(os.path.join(res_dir, 'GB_MARL.log')) # initialize the logger
 
-        
-    # def change_top_level_agent_parameter(self, epsilon, sigma_decay):
-    #     """Change the epsilon and sigma of the top level agent"""
-    #     self.top_level_agent.epsilon = epsilon
-    #     self.top_level_agent.sigma *= sigma_decay
-
 
     def add(self, obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done):
         """Add the transition to the buffer"""
         
-        if top_level_action == 0:
+        if top_level_action == 0: # charging
+            # add the transition to the charging buffer
             for agent_id in obs.keys():
                 o = obs[agent_id]
                 a = action[agent_id]
-                if isinstance(a, int): # if the action is discrete, convert it to one-hot encoding
-                    a = np.eye(self.dim_info[agent_id][1])[a]
                 r = reward[agent_id]
                 next_o = next_obs[agent_id]
                 d = done[agent_id]
                 self.charging_buffers[agent_id].add(o, a, r, next_o, d) # add the transition to the buffer
-        else:
+        else: # discharging
+            # add the transition to the discharging buffer
             for agent_id in obs.keys():
                 o = obs[agent_id]
                 a = action[agent_id]
-                if isinstance(a, int): # if the action is discrete, convert it to one-hot encoding
-                    a = np.eye(self.dim_info[agent_id][1])[a]
                 r = reward[agent_id]
                 next_o = next_obs[agent_id]
                 d = done[agent_id]
@@ -86,7 +77,7 @@ class GB_MARL:
         """Sample transitions from the buffer"""
         obs, act, reward, next_obs, done, next_act = {}, {}, {}, {}, {}, {}
         
-        if top_level_action == 0:
+        if top_level_action == 0: # charging
             total_num = len(self.charging_buffers['agent_0'])
             indices = np.random.choice(total_num, size=batch_size, replace=True)
             
@@ -97,8 +88,9 @@ class GB_MARL:
                 reward[agent_id] = r
                 next_obs[agent_id] = n_o
                 done[agent_id] = d
-                next_act[agent_id] = self.charging_agent[agent_id].target_action(n_o, agents_status[agent_id]) # get the next action using the target actor network
-        else:
+                next_act[agent_id] = \
+                    self.charging_agent[agent_id].target_action(n_o, agents_status[agent_id]) # get the next action using the target actor network
+        else: # discharging
             total_num = len(self.discharging_buffers['agent_0'])
             indices = np.random.choice(total_num, size=batch_size, replace=True)
     
@@ -109,9 +101,17 @@ class GB_MARL:
                 reward[agent_id] = r
                 next_obs[agent_id] = n_o
                 done[agent_id] = d
-                next_act[agent_id] = self.discharging_agent[agent_id].target_action(n_o, agents_status[agent_id]) # get the next action using the target actor network    
+                next_act[agent_id] = \
+                    self.discharging_agent[agent_id].target_action(n_o, agents_status[agent_id]) # get the next action using the target actor network    
         
         return obs, act, reward, next_obs, done, next_act
+    
+    def top_level_sample(self, batch_size):
+        """Sample transitions from the top level buffer"""
+        top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done = self.top_level_buffer.sample(batch_size)
+        top_level_next_act = self.top_level_agent.target_action(top_level_next_obs)
+        return top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act
+
 
     def select_action(self, obs, global_observation, agents_status):
         """Select action using GB_MARL"""
@@ -121,13 +121,13 @@ class GB_MARL:
         top_level_action = int(top_level_action.item()) # get the top level action
 
         actions = {}
-        if top_level_action == 0:
+        if top_level_action == 0: # charging
             for agent, o in obs.items():
                 o = torch.from_numpy(o).unsqueeze(0).float()
                 a = self.charging_agent[agent].action(o, agents_status[agent])
                 actions[agent] = a.squeeze(0).item()
                 self.logger.info(f'{agent} action: {actions[agent]}')
-        else:
+        else: # discharging
             for agent, o in obs.items():
                 o = torch.from_numpy(o).unsqueeze(0).float()
                 a = self.discharging_agent[agent].action(o, agents_status[agent])
@@ -140,22 +140,23 @@ class GB_MARL:
     def learn(self, batch_size, top_level_batch_size, gamma, agents_status):
         """Learn from the replay buffer"""
         
-        for agent_id, agent in self.charging_agent.items():
+        for agent_id, agent in self.charging_agent.items(): # learn from the charging buffer
             obs, act, reward, next_obs, done, next_act = self.sample(batch_size, agents_status, top_level_action=0)
             critic_value = agent.critic_value(list(obs.values()), list(act.values())) # calculate the value of the critic network
             next_target_critic_value = agent.target_critic_value(list(next_obs.values()), list(next_act.values())) # calculate the value of the target critic network
             target_value = reward[agent_id] + gamma * next_target_critic_value * (1 - done[agent_id]) # calculate the target value
             critic_loss = F.mse_loss(critic_value, target_value.detach(), reduction='mean') # calculate the critic loss
             agent.update_critic(critic_loss) # update the critic network
-
+            
+            advantage = target_value - critic_value.detach()
             action, logits = agent.action(obs[agent_id], agents_status[agent_id], model_out=True) # select action
             act[agent_id] = action # update the action
-            actor_loss = -agent.critic_value(list(obs.values()), list(act.values())).mean() # calculate the actor loss
+            actor_loss = -(advantage * agent.critic_value(list(obs.values()), list(act.values()))).mean() # calculate the actor loss using advantage
             actor_loss_pse = torch.pow(logits, 2).mean() # calculate the actor loss pse
             agent.update_actor(actor_loss + 1e-3 * actor_loss_pse) # update the actor network
             self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
             
-        for agent_id, agent in self.discharging_agent.items():
+        for agent_id, agent in self.discharging_agent.items(): # learn from the discharging buffer
             obs, act, reward, next_obs, done, next_act = self.sample(batch_size, agents_status, top_level_action=1)
             critic_value = agent.critic_value(list(obs.values()), list(act.values()))
             next_target_critic_value = agent.target_critic_value(list(next_obs.values()), list(next_act.values()))
@@ -163,26 +164,29 @@ class GB_MARL:
             critic_loss = F.mse_loss(critic_value, target_value.detach(), reduction='mean')
             agent.update_critic(critic_loss)
             
+            advantage = target_value - critic_value.detach()
             action, logits = agent.action(obs[agent_id], agents_status[agent_id], model_out=True)
             act[agent_id] = action
-            actor_loss = -agent.critic_value(list(obs.values()), list(act.values())).mean()
+            actor_loss = -(advantage * agent.critic_value(list(obs.values()), list(act.values()))).mean() # calculate the actor loss using advantage
             actor_loss_pse = torch.pow(logits, 2).mean()
             agent.update_actor(actor_loss + 1e-3 * actor_loss_pse)
             self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
         
         # top level agent
-        top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done = self.top_level_buffer.sample(top_level_batch_size)
+        top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act = self.top_level_sample(top_level_batch_size) # sample transitions from the top level buffer
         top_level_critic_value = self.top_level_agent.critic_value(top_level_obs, top_level_act) # calculate the value of the critic network
-        next_top_target_critic_value = self.top_level_agent.target_critic_value(top_level_next_obs, top_level_act) # calculate the value of the target critic network
+        next_top_target_critic_value = self.top_level_agent.target_critic_value(top_level_next_obs, top_level_next_act) # calculate the value of the target critic network
         top_target_value = top_level_reward + gamma * next_top_target_critic_value * (1 - top_level_done) # calculate the target value
         top_critic_loss = F.mse_loss(top_level_critic_value, top_target_value.detach(), reduction='mean') # calculate the critic loss
         self.top_level_agent.update_critic(top_critic_loss) # update the critic network
         
+        top_advantage = top_target_value - top_level_critic_value.detach()
         top_action, top_logits = self.top_level_agent.action(top_level_obs, model_out=True) # select action
-        top_level_actor_loss = -self.top_level_agent.critic_value(top_level_obs, top_action).mean() # calculate the actor loss
+        top_level_actor_loss = -(top_advantage * self.top_level_agent.critic_value(top_level_obs, top_level_act)).mean() # calculate the actor loss using advantage
         top_level_actor_loss_pse = torch.pow(top_logits, 2).mean() # calculate the actor loss pse
         self.top_level_agent.update_actor(top_level_actor_loss + 1e-3 * top_level_actor_loss_pse) # update the actor network
         self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
+        
         
     def update_target(self, tau):
         """Update the target network"""
@@ -207,27 +211,38 @@ class GB_MARL:
 
     def save(self, reward):
         model_state = {
-            'charging_agent': {name: agent.actor.state_dict() for name, agent in self.charging_agent.items()},
-            'discharging_agent': {name: agent.actor.state_dict() for name, agent in self.discharging_agent.items()},
-            'top_level_agent': self.top_level_agent.actor.state_dict()
+            'charging_agent_actor': {name: agent.actor.state_dict() for name, agent in self.charging_agent.items()},
+            'charging_agent_critic': {name: agent.critic.state_dict() for name, agent in self.charging_agent.items()},
+            'discharging_agent_actor': {name: agent.actor.state_dict() for name, agent in self.discharging_agent.items()},
+            'discharging_agent_critic': {name: agent.critic.state_dict() for name, agent in self.discharging_agent.items()},
+            'top_level_agent_actor': self.top_level_agent.actor.state_dict(),
+            'top_level_agent_critic': self.top_level_agent.critic.state_dict()
         }
         torch.save(model_state, os.path.join(self.res_dir, 'model.pt'))
         
         with open(os.path.join(self.res_dir, 'rewards.pkl'), 'wb') as f:
             pickle.dump({'rewards': reward}, f)
 
+
     @classmethod
-    def load(cls, dim_info, file):
+    def load(cls, dim_info, top_dim_info, actor_lr, critic_lr, epsilon, sigma, res_dir, file):
         """Load the model"""
-        instance = cls(dim_info, 0, 0, 0, 0, os.path.dirname(file))
+        # Initialize the instance with required parameters
+        instance = cls(dim_info, top_dim_info, capacity=0, batch_size=0, 
+                       top_level_buffer_capacity=0, top_level_batch_size=0, 
+                       actor_lr=actor_lr, critic_lr=critic_lr, 
+                       epsilon=epsilon, sigma=sigma, res_dir=res_dir)
         data = torch.load(file)
         
         for agent_id, agent in instance.charging_agent.items():
-            agent.actor.load_state_dict(data['charging_agent'][agent_id])
+            agent.actor.load_state_dict(data['charging_agent_actor'][agent_id])
+            agent.critic.load_state_dict(data['charging_agent_critic'][agent_id])
         
         for agent_id, agent in instance.discharging_agent.items():
-            agent.actor.load_state_dict(data['discharging_agent'][agent_id])
+            agent.actor.load_state_dict(data['discharging_agent_actor'][agent_id])
+            agent.critic.load_state_dict(data['discharging_agent_critic'][agent_id])
         
-        instance.top_level_agent.actor.load_state_dict(data['top_level_agent'])
+        instance.top_level_agent.actor.load_state_dict(data['top_level_agent_actor'])
+        instance.top_level_agent.critic.load_state_dict(data['top_level_agent_critic'])
         
         return instance  # return the instance
