@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
+import random
+import torch
 
 def prepare_ev_request_data(parking_data_path, start_date, end_date):
     """
@@ -82,3 +84,11 @@ def min_max_scaling(value, min_val, max_val):
 
 def standardize(value, mean, std):
     return (value - mean) / std
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
