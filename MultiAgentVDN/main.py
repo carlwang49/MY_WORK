@@ -2,7 +2,6 @@ import numpy as np
 from datetime import datetime, timedelta
 import pandas as pd
 from tqdm import tqdm
-import sys
 from EVBuildingEnv import EVBuildingEnv
 from logger_config import configured_logger as logger
 from utils.plot_results import plot_scores_epsilon
