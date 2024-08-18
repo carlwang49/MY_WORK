@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-start_datetime_str = os.getenv('START_DATETIME', '2018-07-01')
-end_datetime_str = os.getenv('END_DATETIME', '2018-10-01')
+start_datetime_str = os.getenv('TEST_START_DATETIME', '2018-10-01')
+end_datetime_str = os.getenv('TEST_END_DATETIME', '2018-10-07')
 
 # Define the start and end datetime of the EV request data
 start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%d')
@@ -107,3 +107,4 @@ if __name__ == '__main__':
     load_history_df = pd.DataFrame(env.load_history)
     load_history_file = f'{result_dir}/building_loading_history.csv'
     load_history_df.to_csv(load_history_file, index=False)
+    print(f'Test results and histories saved to {result_dir}')
