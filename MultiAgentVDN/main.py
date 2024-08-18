@@ -8,7 +8,7 @@ from logger_config import configured_logger as logger
 from utils.plot_results import plot_scores_epsilon
 import torch
 import torch.optim as optim
-from utilities import prepare_ev_request_data, prepare_ev_departure_data, create_result_dir
+from utilities import prepare_ev_request_data, prepare_ev_departure_data, create_result_dir, set_seed
 from ReplayBuffer import ReplayBuffer
 from QNet import QNet   
 from agent import train
@@ -26,10 +26,6 @@ AGENT_BATCH_SIZE = int(os.getenv('AGENT_BATCH_SIZE'))
 LEARNING_RATE_ACTOR = float(os.getenv('LEARNING_RATE_ACTOR'))
 LEARNING_RATE_CRITIC = float(os.getenv('LEARNING_RATE_CRITIC'))
 EPSILON = float(os.getenv('EPSILON'))
-
-# Import the environment and plotting functions
-sys.path.insert(0,'./env')
-sys.path.insert(0,'./utils')
 
 alpha = ALPHA = float(os.getenv('REWARD_ALPHA'))
 beta = BETA = float(os.getenv('REWARD_BETA'))
@@ -63,6 +59,8 @@ parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data
 def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval, max_episodes, max_epsilon,
                     min_epsilon,test_episodes, warm_up_steps, update_iter, chunk_size, update_target_interval,
                     recurrent):
+    # set seed
+    set_seed(42)
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
@@ -98,9 +96,7 @@ def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval,
             
             # reset the timestamp to the start time of the environment
             env.timestamp = env.start_time 
-            
             while env.timestamp <= env.end_time: 
-                
                 # skip the time
                 if env.timestamp.hour < 7 or env.timestamp.hour > 23:
                     env.timestamp += timedelta(hours=1)
@@ -128,8 +124,9 @@ def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval,
                             env.remove_ev(agent_id)
                             env.current_parking_number -= 1
                             break 
-
+                
                 step_counter += 1
+                state = np.array(state)
                 action, hidden = q.sample_action(torch.Tensor(state).unsqueeze(0), hidden, epsilon)
                 action = action[0].data.cpu().numpy().tolist()
                 next_state, reward, connected, info = env.step(action, env.timestamp)
@@ -239,14 +236,17 @@ if __name__ == '__main__':
                 test_env.current_parking_number += 1 
                         
             current_departures = test_ev_departure_dict.get(test_env.timestamp, [])
+            # print(f"current_departures: {current_departures}")
             for ev in current_departures:
                 request_id = ev['requestID']
                 for agent_id, data in test_env.ev_data.items():
                     if data['requestID'] == request_id:
+                        # print(f"EV {request_id} has departed at {test_env.timestamp}")
                         test_env.remove_ev(agent_id)
                         test_env.current_parking_number -= 1
                         break 
-
+            
+            test_state = np.array(test_state)
             action, hidden = VDNagent.sample_action(torch.Tensor(test_state).unsqueeze(0), hidden, epsilon=0)  # epsilon = 0 for testing
             action = action[0].data.cpu().numpy().tolist()
             next_test_state, reward, connected, info = test_env.step(action, test_env.timestamp)
@@ -255,7 +255,6 @@ if __name__ == '__main__':
             for i in range(num_agents):
                 test_rewards[i].append(reward[i])
             
-            test_env.timestamp += timedelta(hours=1)  # Advance the time by one hour
     
     # Save test soc history and charging records
     test_soc_history_file = f'{result_dir}/test_soc_history.csv'

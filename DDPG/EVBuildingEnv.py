@@ -60,13 +60,6 @@ class EVBuildingEnv(EVChargingEnv):
         self.SoC_upper_bound_dict = {f'agent_{i}': 0 for i in range(num_agents)}
         self.Soc_lower_bound_dict = {f'agent_{i}': 0 for i in range(num_agents)}
 
-
-        # Calculate the maximum building load and the average building load
-        self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_past_same_date_peak_and_valley_load(self.timestamp)
-        self.min_load_diff = self.curr_valley_load - self.curr_mean
-        self.max_load_diff = self.curr_peak_load - self.curr_mean
-
-        
         # peak and valley load at current day
         self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_past_same_date_peak_and_valley_load(self.timestamp)
         self.min_load_diff = self.curr_valley_load - self.curr_mean
