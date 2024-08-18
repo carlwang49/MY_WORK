@@ -248,7 +248,7 @@ if __name__ == '__main__':
                     test_env.current_parking_number -= 1
         
         action, top_level_action = loaded_model.select_action(obs, global_observation, test_env.agents_status)
-        next_obs, next_global_observation, reward, global_reward, done, info = test_env.step(action, top_level_action, test_env.timestamp)
+        next_obs, next_global_observation, reward, global_reward, done, info = test_env.step(action, test_env.timestamp)
 
         obs = next_obs
         global_observation = next_global_observation
