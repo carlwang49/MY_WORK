@@ -9,7 +9,7 @@ import os
 load_dotenv()
 
 start_datetime_str = os.getenv('TEST_START_DATETIME', '2018-10-01')
-end_datetime_str = os.getenv('TEST_START_DATETIME', '2018-10-07')
+end_datetime_str = os.getenv('TEST_END_DATETIME', '2018-10-07')
 
 # Define the start and end datetime of the EV request data
 start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%d')
@@ -18,9 +18,10 @@ end_datetime = datetime.strptime(end_datetime_str, '%Y-%m-%d')
 # Define the start and end date of the EV request data
 start_date = START_DATE = str(start_datetime.date())
 end_date = END_DATE = str(end_datetime.date())
+end_date_minus_one = END_DATE_MINUS_ONE = str((datetime.strptime(END_DATE, '%Y-%m-%d') - timedelta(days=1)).date())
 
 start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
-end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+end_date_without_year = END_DATE_MINUS_ONE[5:]
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = start_datetime

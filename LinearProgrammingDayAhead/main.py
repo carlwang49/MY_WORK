@@ -6,32 +6,35 @@ import warnings
 warnings.filterwarnings('ignore')
 from scipy.optimize import linprog
 from logger_config import configured_logger as logger
-from utils import create_result_dir, get_num_of_evs_in_each_hours, get_rtp_price
+from utils import create_result_dir, get_num_of_evs_in_each_hours, get_rtp_price, set_building_time_range
 from dotenv import load_dotenv
 import os
 load_dotenv()
 
-# 設定 contract_capacity 和 capacity_price
+# Contract capacity and capacity price
 contract_capacity = CONTRACT_CAPACITY = int(os.getenv('CONTRACT_CAPACITY')) 
 capacity_price = CAPACITY_PRICE = float(os.getenv('CAPACITY_PRICE'))
+weight = 1e6  # Adjusted weight for capacity constraint penalty
 
-# Define the start and end date of the EV request data
-start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
-end_date = END_DATE = os.getenv('END_DATETIME', '2018-10-01')
+# Dates for EV request data
+start_date = START_DATE = os.getenv('TEST_START_DATETIME', '2018-07-01')
+end_date = END_DATE = os.getenv('TEST_END_DATETIME', '2018-10-01')
+end_date_minus_one = END_DATE_MINUS_ONE = str((datetime.strptime(END_DATE, '%Y-%m-%d') - timedelta(days=1)).date())
 
-# Define the start and end date of the EV request data without year
-start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
-end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+# Extract year-agnostic dates
+start_date_without_year = START_DATE[5:]  # Assuming format is 'YYYY-MM-DD'
+end_date_without_year = END_DATE_MINUS_ONE[5:]
 
 # Define the start and end datetime of the EV request data
 start_time = START_TIME = datetime.strptime(start_date, '%Y-%m-%d')
 end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
-# Define the number of agents
+# Number of agents and file paths
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
 
+# Environment settings
 min_soc = MIN_SOC = float(os.getenv('SOC_MIN', 0.2))  
 max_soc = MAX_SOC = float(os.getenv('SOC_MAX', 0.8))  
 c_k = C_K = float(os.getenv('BATTERY_CAPACITY', 60))  
@@ -39,37 +42,13 @@ eta = ETA = float(os.getenv('CHARGING_EFFICIENCY', 0.95))
 max_charging_power = MAX_CHARGING_POWER = int(os.getenv('MAX_CHARGING_POWER', 150))  
 max_discharging_power = MAX_DISCHARGING_POWER = int(os.getenv('MAX_DISCHARGING_POWER', -150))  
 
-"""set the building load time range for the environment"""
-def set_building_time_range(building_load: pd.DataFrame, start_time: datetime, end_time: datetime):
-    building_load = building_load[(building_load['Date'] >= start_time) & (building_load['Date'] <= end_time)].copy()
-    building_load.sort_values(by='Date', inplace=True)
-    return building_load
-
 if __name__ == '__main__':
-    """
-    Run a simulation of the EV charging environment with random EV request data and random charging power selection.
-    """
-    # Initialize a DataFrame to store charging records and SoC history
-    charging_records = pd.DataFrame(columns=['requestID', 
-                                            'arrival_time', 
-                                            'departure_time', 
-                                            'initial_soc', 
-                                            'departure_soc',
-                                            'final_soc', 
-                                            'charging_power', 
-                                            'charging_time']) 
+    # Initialize dataframes
+    charging_records = pd.DataFrame(columns=['requestID', 'arrival_time', 'departure_time', 'initial_soc', 'departure_soc', 'final_soc', 'charging_power', 'charging_time']) 
+    soc_history = pd.DataFrame(columns=['requestID', 'current_time', 'soc', 'current_energy', 'charging_power/discharging_power', 'cost', 'total_cost']) 
     
-    # Initialize a DataFrame to store SoC history
-    soc_history = pd.DataFrame(columns=['requestID', 
-                                        'current_time', 
-                                        'soc', 
-                                        'current_energy',
-                                        'charging_power/discharging_power',
-                                        'cost',
-                                        'total_cost']) 
-    
-    # Prepare EV request data
-    day_ahead_schedule_df = pd.read_csv('../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31.csv')
+    # Load EV request data
+    day_ahead_schedule_df = pd.read_csv(parking_data_path)
     day_ahead_schedule_df['date'] = pd.to_datetime(day_ahead_schedule_df['date']).dt.date
     day_ahead_schedule_df['arrival_time'] = pd.to_datetime(day_ahead_schedule_df['arrival_time'])
     day_ahead_schedule_df['departure_time'] = pd.to_datetime(day_ahead_schedule_df['departure_time'])
@@ -77,69 +56,67 @@ if __name__ == '__main__':
     # Initialize building load
     building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
     building_load = set_building_time_range(building_load, start_time, end_time)
-    building_load['Date'] = pd.to_datetime(building_load['Date'])
-    original_load = None
     load_history = pd.DataFrame(columns=['current_time', 'original_load', 'total_load', 'total_action_impact'])
     total_action_impact = defaultdict(float)
     
-    # Create a directory for storing results of the simulation
+    # Create results directory
     result_dir = create_result_dir(f'DayAheadSchedule_{start_date_without_year}_{end_date_without_year}_num{NUM_AGENTS}')
     
-    real_time_price = get_rtp_price(start_time, end_time)
+    # Get real-time price data
+    real_time_price = get_rtp_price(start_time, end_time) 
     
     current_time = start_time  
     while current_time < end_time:
-        
         number_of_ev_in_hours = get_num_of_evs_in_each_hours(day_ahead_schedule_df, current_time)
         
-        # get EV request list in current date
+        # Get EV requests for the current day
         ev_request_list = day_ahead_schedule_df[day_ahead_schedule_df['date'] == current_time.date()].to_dict(orient='records') 
+
         for ev_request in ev_request_list:
             
-            # Get information about the EV request
+            # Extract EV request information
             initial_soc, final_soc = ev_request['initial_soc'], ev_request['departure_soc']
             arrival_time, departure_time = ev_request['arrival_time'].hour, ev_request['departure_time'].hour
             num_intervals = departure_time - arrival_time
             
-            # Calculate the maximum and minimum charging power
+            # Calculate charging/discharging power constraints
             max_powers = [max_charging_power / number_of_ev_in_hours[hour] for hour in range(arrival_time, departure_time)]
             min_powers = [max_discharging_power / number_of_ev_in_hours[hour] for hour in range(arrival_time, departure_time)]
             
-            # Calculate the energy requirements
+            # Calculate energy requirements
             initial_energy = initial_soc * c_k
             required_energy = final_soc * c_k
             min_energy = min_soc * c_k
             max_energy = max_soc * c_k
 
-            # Calculate the time intervals
+            # Define time intervals and price data
             time_intervals = list(range(arrival_time, departure_time))
-            # tou_price = get_tou_price(current_time)
-            # relevant_prices = tou_price[arrival_time:departure_time]
-            tou_price = real_time_price[(real_time_price['datetime'] >= ev_request['arrival_time']) & (real_time_price['datetime'] < ev_request['departure_time'])]
-            relevant_prices = tou_price['average_price'].values
-            
-            # Define the linear programming problem
-            c = np.concatenate((relevant_prices, -np.array(relevant_prices)))
-            
-            # Ensure that the total energy change is equal to the required energy change
-            A_eq = np.concatenate((np.ones(num_intervals), -np.ones(num_intervals))).reshape(1, -1)
+            rtp_price = real_time_price[(real_time_price['datetime'] >= ev_request['arrival_time']) & (real_time_price['datetime'] < ev_request['departure_time'])]
+            relevant_prices = rtp_price['average_price'].values
+
+            # building load data
+            building_current_load = building_load[(building_load['Date'] >= ev_request['arrival_time']) & 
+                                      (building_load['Date'] < ev_request['departure_time'])]['Total_Power(kWh)'].values
+            total_load_cost = building_current_load * relevant_prices
+
+            # Linear programming problem definition
+            c = np.concatenate((total_load_cost + relevant_prices, total_load_cost - relevant_prices, weight * np.array([capacity_price] * num_intervals)))
+ 
+            # Ensure total energy change equals required energy change
+            A_eq = np.concatenate((np.ones(num_intervals), -np.ones(num_intervals), np.zeros(num_intervals))).reshape(1, -1)
             b_eq = np.array([required_energy - initial_energy])
             
-            # Charge and discharge power constraints
-            A_ub = np.zeros((2 * num_intervals + 2 * num_intervals, 2 * num_intervals))
-            b_ub = np.zeros(2 * num_intervals + 2 * num_intervals)
+            # Charge/discharge power constraints
+            A_ub = np.zeros((5 * num_intervals, 3 * num_intervals))  
+            b_ub = np.zeros(5 * num_intervals)
             
             for i in range(num_intervals):
-                # charging power <= max_powers[i]
                 A_ub[i, i] = 1 
                 A_ub[num_intervals + i, num_intervals + i] = 1  
-                
-                # discharging power <= -min_powers[i]
-                # (note that the discharging power is negative, so we need to take the negative)
                 b_ub[i] = max_powers[i]
                 b_ub[num_intervals + i] = -min_powers[i]
             
-            # SoC constraints: ensure that SoC is not less than min_soc and not greater than max_soc 
+            # SoC constraints
             for i in range(num_intervals):
                 A_ub[2 * num_intervals + i, :i + 1] = 1
                 A_ub[2 * num_intervals + i, num_intervals:num_intervals + i + 1] = -1
@@ -149,9 +126,17 @@ if __name__ == '__main__':
                 A_ub[3 * num_intervals + i, num_intervals:num_intervals + i + 1] = 1
                 b_ub[3 * num_intervals + i] = initial_energy - min_energy
 
-            # Variable upper and lower limits
-            bounds = [(0, max_powers[i]) for i in range(num_intervals)] + [(0, -min_powers[i]) for i in range(num_intervals)]
-            
+            # Contract capacity constraints with penalty variables
+            for i in range(num_intervals):
+                A_ub[4 * num_intervals + i, i] = 1
+                A_ub[4 * num_intervals + i, num_intervals + i] = -1
+                A_ub[4 * num_intervals + i, 2 * num_intervals + i] = -1  # penalty variable
+                b_ub[4 * num_intervals + i] = \
+                    contract_capacity - building_load.loc[building_load['Date'] == current_time + timedelta(hours=time_intervals[i]), 'Total_Power(kWh)'].values[0]
+
+            # Variable bounds
+            bounds = [(0, max_powers[i]) for i in range(num_intervals)] + [(0, -min_powers[i]) for i in range(num_intervals)] + [(0, None) for i in range(num_intervals)]
+        
             # Solve the linear programming problem
             res = linprog(c, A_ub, b_ub, A_eq, b_eq, bounds, method='highs')
             
@@ -159,8 +144,6 @@ if __name__ == '__main__':
                 current_energy = initial_energy
                 total_cost = 0
                 current_soc = initial_soc
-                prev_soc = 0
-                prev_energy = 0
                 for i in range(num_intervals):
                     action, energy, cost = 'none', 0, 0
                     if res.x[i] > 0:
@@ -171,33 +154,21 @@ if __name__ == '__main__':
                         action = 'discharge'
                         energy = res.x[num_intervals + i]
                         cost = -res.x[num_intervals + i] * relevant_prices[i]
-                        
-                    prev_energy = current_energy # store the previous energy
-                    prev_soc = current_soc # store the previous SoC
-                    
-                    current_energy += energy if action == 'charge' else -energy # update the current energy
-                    current_soc = current_energy / c_k # update the current SoC
-                    total_cost += cost # update the total cost
+                
+                    current_energy += energy if action == 'charge' else -energy
+                    current_soc = current_energy / c_k
+                    total_cost += cost
                     
                     soc_history.loc[len(soc_history)] = ({
                         'requestID': ev_request['requestID'],    
                         'current_time': current_time + timedelta(hours=time_intervals[i]),
-                        'soc': round(prev_soc, 2),    
-                        'current_energy': round(prev_energy, 2),
+                        'soc': round(current_soc, 2),    
+                        'current_energy': round(current_energy, 2),
                         'charging_power/discharging_power': -energy if action == 'discharge' else energy,
                         'cost': round(cost, 2),
                         'total_cost': round(total_cost, 2)
                     })
                     total_action_impact[current_time + timedelta(hours=time_intervals[i])] += energy if action == 'charge' else -energy
-                    soc_history.loc[len(soc_history)] = ({
-                        'requestID': ev_request['requestID'],    
-                        'current_time': current_time + timedelta(hours=time_intervals[-1]+1),
-                        'soc': round(current_soc, 2),    
-                        'current_energy': round(current_energy, 2),
-                        'charging_power/discharging_power': 0,
-                        'cost': 0,
-                        'total_cost': round(total_cost, 2)
-                    })
                     
             else:
                 raise ValueError("Charging demand cannot be met within the given time frame.")
@@ -214,9 +185,11 @@ if __name__ == '__main__':
                     })
         current_time += timedelta(days=1)
 
+    # Save results
     soc_history.to_csv(f'../Result/{result_dir}/soc_history.csv', index=False)
     charging_records.to_csv(f'../Result/{result_dir}/charging_records.csv', index=False)
-    
+
+    # Calculate load history
     current_time = start_time
     while current_time <= end_time:
         original_load = building_load.loc[building_load['Date'] == current_time, 'Total_Power(kWh)'].values[0]
@@ -236,8 +209,9 @@ if __name__ == '__main__':
             })
         current_time += timedelta(hours=1)
         
-    # save load history
-    # Sort the DataFrame by current_time
+    # Save load history
     load_history = load_history.sort_values(by='current_time')
     load_history_file = f'{result_dir}/building_loading_history.csv'
     load_history.to_csv(load_history_file, index=False)
+
+    print(f'Test results and histories saved to {result_dir}')
