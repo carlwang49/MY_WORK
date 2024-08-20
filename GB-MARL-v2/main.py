@@ -1,12 +1,13 @@
 import pandas as pd
-import os
 import numpy as np
-from datetime import datetime, timedelta
-from MADDPG import MADDPG
-from logger_config import configured_logger as logger
-from maddpg_parameter import parse_args, get_env
-from utils import prepare_ev_request_data, create_result_dir, prepare_ev_departure_data, plot_training_results, set_seed
 from tqdm import tqdm
+from datetime import datetime, timedelta
+from GB_MARL import GB_MARL
+from logger_config import configured_logger as logger
+from GB_MARL_parameter import parse_args, get_env
+from utils import (prepare_ev_request_data, create_result_dir, 
+                   prepare_ev_departure_data, plot_training_results, 
+                   plot_global_training_results, set_seed)
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -39,7 +40,7 @@ num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
-dir_name = DIR_NAME = 'MADDPG'
+dir_name = DIR_NAME = 'GB-MARL-v2'
 
 if __name__ == '__main__':
     
@@ -54,13 +55,15 @@ if __name__ == '__main__':
     ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
     
     # create environment
-    env, dim_info = get_env(num_agents, start_time, end_time)
+    env, dim_info, top_dim_info = get_env(num_agents, start_time, end_time)
 
     # create a new folder to save the result
-    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}') 
+    result_dir = create_result_dir(f'{DIR_NAME}_alpha{alpha}_beta{beta}_num{NUM_AGENTS}') 
+    # result_dir = create_result_dir(f'{DIR_NAME}') 
     
     # create MADDPG agent
-    maddpg = MADDPG(dim_info, args.buffer_capacity, args.batch_size, args.actor_lr, args.critic_lr, result_dir) 
+    gb_marl = GB_MARL(dim_info, top_dim_info, args.buffer_capacity, args.batch_size, 
+                    args.top_level_buffer_capacity, args.top_level_batch_size, args.actor_lr, args.critic_lr, args.epsilon, args.sigma, result_dir) 
 
     step = 0  # global step counter
     agent_num = env.num_agents # number of agents
@@ -71,17 +74,21 @@ if __name__ == '__main__':
         for agent_id in env.agents
     }
     
+    episode_global_rewards = np.zeros(args.episode_num)  # global reward of each episode
+    
     # training
     for episode in tqdm(range(args.episode_num)):
         
         # reset the timestamp to the start time of the environment
         env.timestamp = env.start_time 
-        obs = env.reset()
+        obs, global_observation = env.reset()
         
         # agent reward of the current episode
         agent_reward = {
             agent_id: 0 for agent_id in env.agents
         }  
+
+        curr_global_reward = 0  # global reward of the current episode
         
         while env.timestamp <= env.end_time:  
             
@@ -113,33 +120,44 @@ if __name__ == '__main__':
             step += 1
             if step < args.random_steps:
                 action = {}
+                top_level_action = env.get_top_level_action_space().sample() # sample top level action
+                # print(f'top_level_action: {top_level_action}')
                 for agent_id in env.agents:
                     if env.agents_status[agent_id]:
                         # if the agent is connected 
-                        action[agent_id] = env.action_space(agent_id).sample()
+                        if top_level_action == 0:
+                            action[agent_id] = env.charging_action_space(agent_id).sample()
+                            # print(f'charging action: {action[agent_id]}')
+                        else:
+                            action[agent_id] = env.discharging_action_space(agent_id).sample()
+                            # print(f'discharging action: {action[agent_id]}')
                     else:
                         # if the agent is not connected
-                        action[agent_id] = -1e10 
+                        action[agent_id] = -1e10 # set the action to -1
             else:
-                action = maddpg.select_action(obs, env.agents_status) # select action using MADDPG
-
-            # step the environment
-            next_obs, reward, done, info = env.step(action, env.timestamp)
+                action, top_level_action = gb_marl.select_action(obs, global_observation, env.agents_status) # select action using MADDPG
+                
+            next_obs, next_global_observation, reward, global_reward, done, info = env.step(action, env.timestamp)
 
             # add experience to replay buffer
-            maddpg.add(obs, action, reward, next_obs, done)
+            gb_marl.add(obs, global_observation, action, top_level_action, reward, 
+                       global_reward, next_obs, next_global_observation, done)
             
             # update reward
             for agent_id, r in reward.items():  
-                agent_reward[agent_id] += r
+                agent_reward[agent_id] += r 
+            
+            curr_global_reward += global_reward
             
             # learn from the replay buffer
             if step >= args.random_steps and step % args.learn_interval == 0:  # learn every few steps
-                maddpg.learn(args.batch_size, args.gamma, env.agents_status) # learn from the replay buffer
-                maddpg.update_target(args.tau) # update target network
+                gb_marl.learn(args.batch_size, args.top_level_batch_size, args.gamma, env.agents_status) # learn from the replay buffer
+                gb_marl.update_target(args.tau) # update target network
                 
             # update observation
             obs = next_obs
+            global_observation = next_global_observation
+            # print(global_observation)
 
             # if the current time is greater than or equal to the end time, break
             if env.timestamp >= env.end_time: 
@@ -148,6 +166,8 @@ if __name__ == '__main__':
         # episode finishes
         for agent_id, r in agent_reward.items():  # record reward
             episode_rewards[agent_id][episode] = r
+            
+        episode_global_rewards[episode] = curr_global_reward
        
         if (episode + 1) % 100 == 0:  # print info every 100 episodes
             message = f'episode {episode + 1}, '
@@ -157,9 +177,11 @@ if __name__ == '__main__':
                 sum_reward += r
             message += f'sum reward: {sum_reward}'
             logger.bind(console=True).info(message)
+            logger.bind(console=True).info(f'global reward: {curr_global_reward}')
 
-    maddpg.save(episode_rewards)  # save model
+    gb_marl.save(episode_rewards)  # save model
     plot_training_results(episode_rewards, args, result_dir)
+    plot_global_training_results(episode_global_rewards, args, result_dir)
 
     # save soc history and charging records
     soc_history_file = f'{result_dir}/soc_history.csv'
@@ -172,7 +194,6 @@ if __name__ == '__main__':
     load_history_file = f'{result_dir}/building_loading_history.csv'
     load_history_df.to_csv(load_history_file, index=False)
     
-    
     # ==========================
     # Execute testing phase
     # ==========================
@@ -181,17 +202,23 @@ if __name__ == '__main__':
     testing_ev_departure_dict = prepare_ev_departure_data(parking_data_path, test_start_date, test_end_date)
     
     # Create environment for testing (September 1st to September 7th)
-    test_env, _ = get_env(num_agents, test_start_time, test_end_time)
+    test_env, _, _ = get_env(num_agents, test_start_time, test_end_time)
 
     # Load the trained model
-    loaded_model = MADDPG.load(
+    loaded_model = GB_MARL.load(
                         dim_info=dim_info,
+                        top_dim_info=top_dim_info,
+                        actor_lr=args.actor_lr,
+                        critic_lr=args.critic_lr,
+                        epsilon=args.epsilon,
+                        sigma=args.sigma,
+                        res_dir=result_dir,
                         file=os.path.join(result_dir, 'model.pt')
                     )
 
     # Initialize testing variables
     test_results = []
-    obs = test_env.reset()
+    obs, global_observation = test_env.reset()
     
     while test_env.timestamp <= test_env.end_time:
         if test_env.timestamp.hour < 7 or test_env.timestamp.hour > 23:
@@ -214,11 +241,11 @@ if __name__ == '__main__':
                     test_env.remove_ev(agent_id)
                     test_env.current_parking_number -= 1
         
-        action = loaded_model.select_action(obs, test_env.agents_status) 
-        next_obs, reward, done, info = test_env.step(action, test_env.timestamp)
+        action, top_level_action = loaded_model.select_action(obs, global_observation, test_env.agents_status)
+        next_obs, next_global_observation, reward, global_reward, done, info = test_env.step(action, test_env.timestamp)
 
         obs = next_obs
-
+        global_observation = next_global_observation
     
     # Save testing soc history and charging records
     test_soc_history_file = f'{result_dir}/test_soc_history.csv'
@@ -232,3 +259,6 @@ if __name__ == '__main__':
     test_load_history_df.to_csv(test_load_history_file, index=False)
     
     print(f'Test results and histories saved to {result_dir}')
+    
+    
+    

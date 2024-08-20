@@ -49,7 +49,7 @@ test_end_time = TEST_END_TIME = datetime.strptime(test_end_date, '%Y-%m-%d')
 
 # Define the number of agents
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
-dir_name = DIR_NAME = 'VDN-MARL-TEST'
+dir_name = DIR_NAME = 'VDN-MARL'
 
 # Define the path to the EV request data
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'

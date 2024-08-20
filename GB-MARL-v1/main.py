@@ -41,7 +41,7 @@ parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data
 
 # Define the directory name to save the result
 # dir_name = DIR_NAME = 'GB-MARL-Discrete'
-dir_name = DIR_NAME = os.getenv('DIR_NAME', 'GB-MARL-TEST')
+dir_name = DIR_NAME = 'GB-MARL-v1'
 
 if __name__ == '__main__':
     

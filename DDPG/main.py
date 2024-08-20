@@ -41,7 +41,7 @@ num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
-dir_name = DIR_NAME = 'DDPG-TEST'
+dir_name = DIR_NAME = 'DDPG'
 
 # Define hyperparameters
 random_steps = RANDOM_STEPS  = int(float(os.getenv('RANDOM_STEPS')))  # Take the random actions in the beginning for the better exploration
