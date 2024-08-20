@@ -10,7 +10,7 @@ load_dotenv()
 fmt = '<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | pid=<cyan>{process}</cyan> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>'
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 charging_station_config = {"num": NUM_AGENTS}
-log_path = f"../log/Unschedule-agent_num-{charging_station_config['num']}/{datetime.now().strftime('%Y%m-%d_%H:%M:%S')}.log"
+log_path = f"../log/random-agent_num-{charging_station_config['num']}/{datetime.now().strftime('%Y%m-%d_%H:%M:%S')}.log"
 
 # add a console handler to print the log
 def filter_console(record):
