@@ -14,7 +14,7 @@ class GB_MARL:
     def __init__(self, dim_info, top_dim_info, capacity, batch_size, top_level_buffer_capacity, 
                  top_level_batch_size, actor_lr, critic_lr, epsilon, sigma, res_dir):
         """dim_info: dict, key is agent_id, value is a tuple of obs_dim and act_dim"""
-        
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # Top level agent
         top_level_obs_dim, top_level_act_dim = top_dim_info[0], top_dim_info[1] # observation and action dimension of the top level agent
         self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr, epsilon, sigma) # initialize the top level agent
@@ -63,7 +63,7 @@ class GB_MARL:
         # get the total num of transitions, these buffers should have same number of transitions
         total_num = len(self.buffers['agent_0'])
         indices = np.random.choice(total_num, size=batch_size, replace=True)
- 
+        
         # but only the reward and done of the current agent is needed in the calculation
         obs, act, reward, next_obs, done, next_act = {}, {}, {}, {}, {}, {}
         for agent_id, buffer in self.buffers.items():
@@ -86,12 +86,8 @@ class GB_MARL:
         return top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act
 
 
-    def select_action(self, obs, global_observation, agents_status):
+    def select_action(self, obs, top_level_action, agents_status):
         """Select action using GB_MARL"""
-        
-        top_level_obs = global_observation
-        top_level_action = self.top_level_agent.action(torch.from_numpy(top_level_obs).unsqueeze(0).float()) # select top level action
-        top_level_action = int(top_level_action.item()) # get the top level action
 
         actions = {}
         for agent, o in obs.items():
@@ -101,19 +97,64 @@ class GB_MARL:
             # actions[agent] = a.squeeze(0).argmax().item()
             actions[agent] = a.squeeze(0).item()
             self.logger.info(f'{agent} action: {actions[agent]}')
-                
-        return actions, top_level_action
+        
+        return actions
+    
+    
+    def select_top_level_action(self, global_observation):
+        """Select top level action using GB_MARL"""
+        top_level_obs = global_observation
+        top_level_action = self.top_level_agent.action(torch.from_numpy(top_level_obs).unsqueeze(0).float()) # select top level action
+        top_level_action = int(top_level_action.item()) # get the top level action
+        
+        return top_level_action
+    
+    def pass_high_obs_to_low_obs(self, obs, top_level_act, top_level_obs, agents):
+        """Pass observation to the agents"""
+        top_level_obs_tensor, top_level_act_tensor = torch.tensor(top_level_obs, dtype=torch.float32).to(self.device), torch.tensor(top_level_act, dtype=torch.float32).to(self.device)
+        top_level_obs_tensor, top_level_act_tensor = top_level_obs_tensor.view(-1, len(top_level_obs)), top_level_act_tensor.view(-1, 1)
+        top_level_critic_value = self.top_level_agent.critic_value(top_level_obs_tensor, top_level_act_tensor)
+        top_level_critic_scalar = top_level_critic_value.mean().item()
+        
+        for agent_id in agents:
+            obs[agent_id][6] = top_level_act
+            obs[agent_id][7] = top_level_critic_scalar
+        
+        return obs
 
-
+    
+    def pass_low_obs_to_high_obs(self, next_global_observation, obs, actions, agents):
+        """Pass low observation to the top level agent"""
+        low_obs_list, low_act_list = [], []
+        # get the observation and action of the low level agents
+        for agent_id in agents:
+            low_obs_tensor = torch.tensor(obs[agent_id], dtype=torch.float32).to(self.device).unsqueeze(0)
+            low_act_tensor = torch.tensor(actions[agent_id], dtype=torch.float32).to(self.device).unsqueeze(0)
+            low_obs_tensor = low_obs_tensor.view(1, -1)
+            low_act_tensor = low_act_tensor.view(1, -1)
+            low_obs_list.append(low_obs_tensor)
+            low_act_list.append(low_act_tensor)
+        
+        # calculate the critic value of the low level agents
+        low_critic_values = self.agents[agent_id].critic_value(low_obs_list, low_act_list)
+        critic_values = [value.item() for value in low_critic_values]
+        
+        # calculate the average and standard deviation of the critic values
+        avg_critic_value = np.mean(critic_values)
+        std_critic_value = np.std(critic_values)
+        next_global_observation[8] = avg_critic_value
+        next_global_observation[9] = std_critic_value
+        
+        return next_global_observation
+    
     def learn(self, batch_size, top_level_batch_size, gamma, agents_status):
         """Learn from the replay buffer"""
         
         # top level agent
         top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act = self.top_level_sample(top_level_batch_size) # sample transitions from the top level buffer
-        
         # update the top level critic 
         top_level_critic_value = self.top_level_agent.critic_value(top_level_obs, top_level_act) # calculate the value of the critic network
-        
+
         # calculate top level target critic value
         next_top_target_critic_value = self.top_level_agent.target_critic_value(top_level_next_obs, top_level_next_act) # calculate the value of the target critic network
         
@@ -142,8 +183,7 @@ class GB_MARL:
             critic_value = agent.critic_value(list(obs.values()), list(act.values()))
 
             # calculate target critic value
-            next_target_critic_value = agent.target_critic_value(list(next_obs.values()),
-                                                                 list(next_act.values()))
+            next_target_critic_value = agent.target_critic_value(list(next_obs.values()), list(next_act.values()))
             
             # calculate target value
             target_value = reward[agent_id] + gamma * next_target_critic_value * (1 - done[agent_id])

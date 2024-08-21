@@ -116,37 +116,44 @@ if __name__ == '__main__':
                         env.remove_ev(agent_id)
                         env.current_parking_number -= 1 # decrease the number of EVs in the environment
             
-            # select action
+            # select actions
             step += 1
             if step < args.random_steps:
-                action = {}
-                top_level_action = env.get_top_level_action_space().sample() # sample top level action
+                actions = {}
+                top_level_action = env.get_top_level_action_space().sample() # sample top level actions
+                obs = gb_marl.pass_high_obs_to_low_obs(obs, top_level_action, global_observation, env.agents)
                 # print(f'top_level_action: {top_level_action}')
                 for agent_id in env.agents:
                     if env.agents_status[agent_id]:
                         # if the agent is connected 
                         if top_level_action == 0:
-                            action[agent_id] = env.charging_action_space(agent_id).sample()
-                            # print(f'charging action: {action[agent_id]}')
+                            actions[agent_id] = env.charging_action_space(agent_id).sample()
+                            # print(f'charging actions: {actions[agent_id]}')
                         else:
-                            action[agent_id] = env.discharging_action_space(agent_id).sample()
-                            # print(f'discharging action: {action[agent_id]}')
+                            actions[agent_id] = env.discharging_action_space(agent_id).sample()
+                            # print(f'discharging actions: {actions[agent_id]}')
                     else:
                         # if the agent is not connected
-                        action[agent_id] = -1e10 # set the action to -1
+                        actions[agent_id] = -1e10 # set the actions to -1
             else:
-                action, top_level_action = gb_marl.select_action(obs, global_observation, env.agents_status) # select action using MADDPG
-                
-            next_obs, next_global_observation, reward, global_reward, done, info = env.step(action, env.timestamp)
+                top_level_action = gb_marl.select_top_level_action(global_observation)
+                obs = gb_marl.pass_high_obs_to_low_obs(obs, top_level_action, global_observation, env.agents)
+                actions = gb_marl.select_action(obs, top_level_action, env.agents_status) 
+            
+            # NOTE next_global_observation 是用 Q network 算出這個時間點的十個 actions 的平均值和十個 actions 的標準差
+            # NOTE next_obs 直接用這個時間點的 global actions 和 critic value
+            next_obs, next_global_observation, reward, global_reward, done, info = env.step(actions, env.timestamp)
+            next_global_observation = gb_marl.pass_low_obs_to_high_obs(next_global_observation, obs, actions, env.agents)
 
             # add experience to replay buffer
-            gb_marl.add(obs, global_observation, action, top_level_action, reward, 
+            gb_marl.add(obs, global_observation, actions, top_level_action, reward, 
                        global_reward, next_obs, next_global_observation, done)
             
             # update reward
             for agent_id, r in reward.items():  
                 agent_reward[agent_id] += r 
             
+            # update global reward
             curr_global_reward += global_reward
             
             # learn from the replay buffer
@@ -155,9 +162,9 @@ if __name__ == '__main__':
                 gb_marl.update_target(args.tau) # update target network
                 
             # update observation
+            # NOTE 用更新過的 Q network 算出這個時間點的十個 actions 的平均值和十個 actions 的標準差取代原本的。
+            global_observation = next_global_observation 
             obs = next_obs
-            global_observation = next_global_observation
-            # print(global_observation)
 
             # if the current time is greater than or equal to the end time, break
             if env.timestamp >= env.end_time: 
@@ -241,8 +248,9 @@ if __name__ == '__main__':
                     test_env.remove_ev(agent_id)
                     test_env.current_parking_number -= 1
         
-        action, top_level_action = loaded_model.select_action(obs, global_observation, test_env.agents_status)
-        next_obs, next_global_observation, reward, global_reward, done, info = test_env.step(action, test_env.timestamp)
+        top_level_action = gb_marl.select_top_level_action(global_observation)
+        actions = loaded_model.select_action(obs, top_level_action, test_env.agents_status)
+        next_obs, next_global_observation, reward, global_reward, done, info = test_env.step(actions, test_env.timestamp)
 
         obs = next_obs
         global_observation = next_global_observation

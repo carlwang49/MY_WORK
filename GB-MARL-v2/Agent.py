@@ -39,8 +39,7 @@ class Agent:
         if not agent_status:
             # Apply masking: setting logits of invalid actions to a large negative value
             logits[:, 0] = -1e10  # Assuming the invalid action corresponds to index 0
-        
-        
+            
         if top_level_action == 0: # charging action
             action = 0.5 + 0.5 * torch.sigmoid(logits)
         else: # discharging action

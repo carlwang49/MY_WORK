@@ -8,6 +8,7 @@ from ActionSpace import ActionSpace, TopLevelActionSpace
 from PriceEnvironment import PriceEnvironment
 from utils import min_max_scaling, standardize
 from dotenv import load_dotenv
+from GB_MARL import GB_MARL
 import os
 load_dotenv()
 
@@ -54,7 +55,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.current_parking_number = 0  # Number of currently connected charging piles
         
         # Initialize the observation space and action space for each agent
-        self.observation_spaces = {f'agent_{i}': np.zeros(6) for i in range(num_agents)} # SoC, building load, P_max_tk, P_min_tk
+        self.observation_spaces = {f'agent_{i}': np.zeros(8) for i in range(num_agents)} # SoC, building load, P_max_tk, P_min_tk
         # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = {f'agent_{i}': ActionSpace(0, 1, (1,)) for i in range(num_agents)}  
         # self.action_spaces = {f'agent_{i}': DiscreteActionSpace(self.action_values) for i in range(num_agents)}  
@@ -66,8 +67,8 @@ class EVBuildingEnv(EVChargingEnv):
         
         self.dones = {agent_id: False for agent_id in self.agents}
         self.infos = {}
-        self.inactive_observation = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
-        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
+        self.inactive_observation = np.array([0, 0, 0, 0, 0, 0, -1e10, -1e10], dtype=np.float32)
+        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
         
         # # Calculate the average of the top 10% of historical peak electricity consumption
         # sorted_load_history = self.building_load['Total_Power(kWh)'].sort_values(ascending=False)
@@ -210,7 +211,7 @@ class EVBuildingEnv(EVChargingEnv):
 
 
     """get state information for each agent in the environment"""
-    def observe(self, agent_id, current_time: datetime):
+    def observe(self, agent_id, current_time: datetime): # local state
         
         # If the current time is the start time, return the initial state
         if current_time == self.start_time or self.agents_status[agent_id] == False:
@@ -235,7 +236,13 @@ class EVBuildingEnv(EVChargingEnv):
         # Get agent status
         agent_status = self.agents_status[agent_id]
         
-        state = [soc, normalized_P_max_tk, normalized_P_min_tk, emergency, current_price, agent_status]
+        # top level action
+        top_level_action = -1e10
+        
+        # top level critic value
+        top_level_critic_value = -1e10
+        
+        state = [soc, normalized_P_max_tk, normalized_P_min_tk, emergency, current_price, agent_status, top_level_action, top_level_critic_value]
         
         # Return the state information
         return np.array(state, dtype=np.float32)
@@ -259,9 +266,17 @@ class EVBuildingEnv(EVChargingEnv):
         # get total EV energy
         total_ev_energy = sum([self.ev_data[agent_id]['soc'] * self.C_k for agent_id in self.agents_status if self.agents_status[agent_id]])
         
+        # Get past_avg_load, future_avg_load, past_avg_price, future_avg_price
         past_avg_load, future_avg_load, past_avg_price, future_avg_price = self.calculate_load_and_price_trends(current_time)
         
-        state = [current_parking_number, total_ev_energy, current_price, normalized_load_diff, past_avg_load, future_avg_load, past_avg_price, future_avg_price]
+        # Get low level average critic value 
+        low_level_avg_critic_value = 0
+        
+        # Get low level standard deviation of critic value
+        low_level_std_critic_value = 0
+        
+        state = [current_parking_number, total_ev_energy, current_price, normalized_load_diff, 
+                 past_avg_load, future_avg_load, past_avg_price, future_avg_price, low_level_avg_critic_value, low_level_std_critic_value]
         
         # Return the state information
         return np.array(state, dtype=np.float32)
@@ -295,7 +310,7 @@ class EVBuildingEnv(EVChargingEnv):
         self.current_parking_number = 0  # Number of currently connected charging piles
         
         # Initialize the observation space and action space for each agent
-        self.observation_spaces = {f'agent_{i}': np.zeros(6) for i in range(self.num_agents)} # SoC, building load, P_max_tk, P_min_tk
+        self.observation_spaces = {f'agent_{i}': np.zeros(8) for i in range(self.num_agents)} # SoC, building load, P_max_tk, P_min_tk
         # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = {f'agent_{i}': ActionSpace(0, 1, (1,)) for i in range(self.num_agents)}  
         # self.action_spaces = {f'agent_{i}': DiscreteActionSpace(self.action_values) for i in range(self.num_agents)}  
@@ -307,8 +322,8 @@ class EVBuildingEnv(EVChargingEnv):
 
         self.dones = {agent_id: False for agent_id in self.agents}
         self.infos = {}
-        self.inactive_observation = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
-        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
+        self.inactive_observation = np.array([0, 0, 0, 0, 0, 0, -1e10, -1e10], dtype=np.float32)
+        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
         
         self.current_parking = np.zeros(self.num_agents, dtype=bool)  # Whether the charging pile is connected
         self.current_parking_number = 0  # Number of currently connected charging piles
