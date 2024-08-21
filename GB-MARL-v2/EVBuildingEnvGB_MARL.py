@@ -8,7 +8,6 @@ from ActionSpace import ActionSpace, TopLevelActionSpace
 from PriceEnvironment import PriceEnvironment
 from utils import min_max_scaling, standardize
 from dotenv import load_dotenv
-from GB_MARL import GB_MARL
 import os
 load_dotenv()
 
