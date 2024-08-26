@@ -12,6 +12,7 @@ class Buffer:
         self.obs = np.zeros((capacity, obs_dim))
         self.action = np.zeros((capacity, act_dim))
         self.reward = np.zeros(capacity)
+        self.current_hour = np.zeros(capacity)
         self.next_obs = np.zeros((capacity, obs_dim))
         self.done = np.zeros(capacity, dtype=bool)
 
@@ -20,13 +21,14 @@ class Buffer:
 
         self.device = device
 
-    def add(self, obs, action, reward, next_obs, done):
+    def add(self, obs, action, reward, current_hour, next_obs, done):
         """ add an experience to the memory """
         self.obs[self._index] = obs
         self.action[self._index] = action
         self.reward[self._index] = reward
         self.next_obs[self._index] = next_obs
         self.done[self._index] = done
+        self.current_hour[self._index] = current_hour
 
         self._index = (self._index + 1) % self.capacity
         if self._size < self.capacity: # if the buffer is not full
@@ -37,6 +39,7 @@ class Buffer:
         obs = self.obs[indices]
         action = self.action[indices]
         reward = self.reward[indices]
+        current_hour = self.current_hour[indices]
         next_obs = self.next_obs[indices]
         done = self.done[indices]
         
@@ -45,10 +48,11 @@ class Buffer:
         obs = torch.from_numpy(obs).float().to(self.device)  # torch.Size([batch_size, state_dim])
         action = torch.from_numpy(action).float().to(self.device)  # torch.Size([batch_size, action_dim])
         reward = torch.from_numpy(reward).float().to(self.device)  # just a tensor with length: batch_size
+        current_hour = torch.from_numpy(current_hour).float().to(self.device)  # just a tensor with length: batch_size
         # reward = (reward - reward.mean()) / (reward.std() + 1e-7)
         next_obs = torch.from_numpy(next_obs).float().to(self.device)  # Size([batch_size, state_dim])
         done = torch.from_numpy(done).float().to(self.device)  # just a tensor with length: batch_size
-        return obs, action, reward, next_obs, done
+        return obs, action, reward, current_hour, next_obs, done
 
     def __len__(self):
         return self._size

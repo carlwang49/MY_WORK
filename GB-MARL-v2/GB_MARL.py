@@ -37,7 +37,8 @@ class GB_MARL:
         self.logger = setup_logger(os.path.join(res_dir, 'GB_MARL.log')) # initialize the logger
 
 
-    def add(self, obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done):
+    def add(self, obs, global_observation, action, top_level_action, reward, global_reward, 
+            next_obs, next_global_observation, current_hour, done):
         """Add the transition to the buffer"""
         
         # NOTE that the experience is a dict with agent name as its key
@@ -47,7 +48,7 @@ class GB_MARL:
             r = reward[agent_id]
             next_o = next_obs[agent_id]
             d = done[agent_id]
-            self.buffers[agent_id].add(o, a, r, next_o, d) # add experience to the buffer of each agent
+            self.buffers[agent_id].add(o, a, r, current_hour, next_o, d) # add experience to the buffer of each agent
         
         top_level_obs = global_observation 
         top_level_next_obs = next_global_observation
@@ -65,19 +66,20 @@ class GB_MARL:
         indices = np.random.choice(total_num, size=batch_size, replace=True)
         
         # but only the reward and done of the current agent is needed in the calculation
-        obs, act, reward, next_obs, done, next_act = {}, {}, {}, {}, {}, {}
+        obs, act, reward, next_obs, cur_hour, done, next_act = {}, {}, {}, {}, {}, {}, {}
         for agent_id, buffer in self.buffers.items():
             # sample experience from the buffer
-            o, a, r, n_o, d = buffer.sample(indices)
+            o, a, r, cur_hr, n_o, d = buffer.sample(indices)
             obs[agent_id] = o
             act[agent_id] = a
             reward[agent_id] = r
+            cur_hour[agent_id] = cur_hr
             next_obs[agent_id] = n_o
             done[agent_id] = d
             # calculate next_action using target_network and next_state
             next_act[agent_id] = self.agents[agent_id].target_action(n_o, agents_status[agent_id], top_level_next_action)
         
-        return obs, act, reward, next_obs, done, next_act
+        return obs, act, reward, cur_hour, next_obs, done, next_act
     
     def top_level_sample(self, batch_size):
         """Sample transitions from the top level buffer"""
@@ -151,7 +153,9 @@ class GB_MARL:
         """Learn from the replay buffer"""
         
         # top level agent
-        top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act = self.top_level_sample(top_level_batch_size) # sample transitions from the top level buffer
+        top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act = \
+            self.top_level_sample(top_level_batch_size) # sample transitions from the top level buffer
+        
         # update the top level critic 
         top_level_critic_value = self.top_level_agent.critic_value(top_level_obs, top_level_act) # calculate the value of the critic network
 
@@ -177,8 +181,8 @@ class GB_MARL:
         top_level_next_action = int(torch.mean(top_level_next_act).item() >= 0.5)
         top_level_action = int(torch.mean(top_level_act).item() >= 0.5)
         for agent_id, agent in self.agents.items():
-            obs, act, reward, next_obs, done, next_act = self.sample(batch_size, agents_status, top_level_next_action)
-
+            obs, act, reward, current_hour, next_obs, done, next_act = self.sample(batch_size, agents_status, top_level_next_action)
+            
             # update critic
             critic_value = agent.critic_value(list(obs.values()), list(act.values()))
 
@@ -196,12 +200,39 @@ class GB_MARL:
             # action of the current agent is calculated using its actor
             action, logits = agent.action(obs[agent_id], agents_status[agent_id], top_level_action, model_out=True)
             act[agent_id] = action
-            actor_loss = -agent.critic_value(list(obs.values()), list(act.values())).mean()
+            agent_critic_value = agent.critic_value(list(obs.values()), list(act.values()))
+            lcb = self.LCB(agent_critic_value, act[agent_id], obs[agent_id], current_hour[agent_id])
+            actor_loss = -lcb.mean()
             actor_loss_pse = torch.pow(logits, 2).mean()
             agent.update_actor(actor_loss + 1e-3 * actor_loss_pse) # update actor
             self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
         
+    def LCB(self, actions_critics_values, actions, obs_agent_id, current_hour_agent_id, epsilon=1e-8):
+        """Calculate the LCB"""
+
+        def clamp_and_check_nan(tensor, min_val, device):
+            """Clamps the tensor to avoid invalid values and checks for NaN."""
+            tensor = tensor.clamp(min=min_val)
+            return torch.where(torch.isnan(tensor), torch.tensor(0.0, device=device), tensor)
         
+        actions = actions.squeeze(1)
+        SoC_d, SoC_t = obs_agent_id[:, 1], obs_agent_id[:, 0]
+        t_d, t_a = obs_agent_id[:, 2], obs_agent_id[:, 3]
+
+        # Add epsilon to avoid log(0) and division by zero issues
+        safe_actions = actions + epsilon
+
+        # Clamp and check for NaN
+        SoC_diff = clamp_and_check_nan(SoC_d - SoC_t, epsilon, actions.device)
+        time_diff = clamp_and_check_nan(t_d - t_a, epsilon, actions.device)
+        time_remaining = (t_d - current_hour_agent_id).clamp(min=0)
+
+        # Calculate the LCB term
+        sqrt_term = clamp_and_check_nan(torch.sqrt(SoC_diff * (time_remaining / time_diff)), epsilon, actions.device)
+        lcb = actions_critics_values - torch.abs(torch.log2(safe_actions)) * sqrt_term
+
+        return lcb
+
         
     def update_target(self, tau):
         """Update the target network"""

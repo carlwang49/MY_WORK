@@ -45,7 +45,7 @@ dir_name = DIR_NAME = 'GB-MARL-v2'
 if __name__ == '__main__':
     
     # set seed
-    set_seed(42)
+    set_seed(30)
     
     # parse arguments
     args = parse_args()
@@ -147,7 +147,7 @@ if __name__ == '__main__':
 
             # add experience to replay buffer
             gb_marl.add(obs, global_observation, actions, top_level_action, reward, 
-                       global_reward, next_obs, next_global_observation, done)
+                       global_reward, next_obs, next_global_observation, env.timestamp.hour, done)
             
             # update reward
             for agent_id, r in reward.items():  
