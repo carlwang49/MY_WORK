@@ -101,8 +101,56 @@
 ## Usage
 
 1. **數據預處理**: 使用 `DataPreprocessing.ipynb` 來清理和準備訓練數據。
+
+2. **新增和設定環境檔**: 新增 .env 檔，設定範例如下:
+  
+  ```
+  # Description: Environment variables for the EV charging system
+  # Simulation settings
+  START_DATETIME=2018-07-01 # Start date of the simulation
+  END_DATETIME=2018-08-01 # End date of the simulation
+  TEST_START_DATETIME=2018-08-01 # Test date of the simulation
+  TEST_END_DATETIME=2018-09-01 # Test date of the simulation
+  NUM_AGENTS=10  # Number of charging piles
+  # DIR_NAME=GB-MARL # Directory name for saving the results
+
+  # EV settings
+  BATTERY_CAPACITY=60 # Maximum battery capacity (kWh)
+  SOC_MIN=0.2 # Minimum state of charge (SoC) for EVs
+  SOC_MAX=0.9 # Maximum state of charge (SoC) for EVs
+  MAX_CHARGING_POWER=150 # Rated maximum charging power of charging piles (kW)
+  MAX_DISCHARGING_POWER=-150 # Rated maximum discharging power of charging piles (kW)
+  ENERGY_CONVERSION_EFFICIENCY=0.98 # Coefficient of energy conversion efficiency
+
+  # Building settings
+  MAX_LOAD=1000 # Maximum load of the building (kW)
+  MIN_LOAD=0 # Minimum load of the building (kW)
+  CONTRACT_CAPACITY=700 # Contract capacity of the building (kW)
+  CAPACITY_PRICE=15 # Capacity price of the building ($/kW)
+
+  # Parameters for the reward function
+  REWARD_ALPHA = 0.5 # Weight
+  REWARD_BETA = 0.5 # Weight
+  REWARD_GAMMA = 0.5 # Weight
+
+  # Hyperparameters
+  NUMBER_OF_EPISODES=3000 # Number of total training episodes
+  LEARN_INTERVAL=100 # Interval for training the actor and critic networks
+  RANDOM_STEPS=5e4 # Number of random steps before training
+  TAU=0.01 # Tau for soft update of target networks
+  GAMMA=0.97 # Discount factor for future rewards
+  AGENT_BUFFER_CAPACITY=3e4 # Size of the replay buffer
+  TOP_LEVEL_BUFFER_CAPACITY=3e4 # Size of the top-level replay buffer
+  AGENT_BATCH_SIZE=1024 # Mini-batch size for training the agent networks
+  TOP_LEVEL_BATCH_SIZE=1024 # Mini-batch size for training the top-level network
+  LEARNING_RATE_ACTOR=0.00005 # Learning rate for the actor network
+  LEARNING_RATE_CRITIC=0.00005 # Learning rate for the critic network
+  EPSILON = 0.9 # Epsilon for the epsilon-greedy policy
+  SIGMA = 0.1 # Sigma for the Ornstein-Uhlenbeck noise
+  SIGMA_DECAY = 0.995 # Sigma decay for the Ornstein-Uhlenbeck noise
+  ```
    
-2. **訓練模型**: 在各子模組的 `main.py` 文件中運行相應的算法來進行模型訓練。
+3. **訓練模型**: 在各子模組的 `main.py` 文件中運行相應的算法來進行模型訓練。
 
    ```bash
    python3 main.py
