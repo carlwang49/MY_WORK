@@ -97,6 +97,7 @@
     ```bash
     pip install -r requirements.txt
     ```
+2. 下載 Dataset: https://drive.google.com/file/d/1yVtRbo8OIYw0s1ZjhvCjQpNXeko2L7Uo/view?usp=sharing
 
 ## Usage
 

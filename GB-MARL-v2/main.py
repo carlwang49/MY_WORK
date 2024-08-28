@@ -1,3 +1,4 @@
+import wandb
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -43,12 +44,24 @@ parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data
 dir_name = DIR_NAME = 'GB-MARL-v2'
 
 if __name__ == '__main__':
-    
+   
     # set seed
     set_seed(30)
     
     # parse arguments
     args = parse_args()
+    default_config = vars(args)
+    default_config['alpha'] = alpha
+    default_config['beta'] = beta
+    default_config['start_date'] = start_date
+    default_config['end_date'] = end_date
+    default_config['test_start_date'] = test_start_date
+    default_config['test_end_date'] = test_end_date
+    default_config['num_agents'] = num_agents
+
+    wandb.init(project=DIR_NAME, config=default_config)
+    wandb.run.name = "GB-MARL-v2"
+    wandb.run.save()
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
@@ -158,7 +171,7 @@ if __name__ == '__main__':
             
             # learn from the replay buffer
             if step >= args.random_steps and step % args.learn_interval == 0:  # learn every few steps
-                gb_marl.learn(args.batch_size, args.top_level_batch_size, args.gamma, env.agents_status) # learn from the replay buffer
+                gb_marl.learn(args.batch_size, args.top_level_batch_size, args.gamma, env.agents_status, step) # learn from the replay buffer
                 gb_marl.update_target(args.tau) # update target network
                 
             # update observation

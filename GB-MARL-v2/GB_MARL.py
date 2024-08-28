@@ -1,3 +1,4 @@
+import wandb
 import os
 import pickle
 import numpy as np
@@ -149,7 +150,7 @@ class GB_MARL:
         
         return next_global_observation
     
-    def learn(self, batch_size, top_level_batch_size, gamma, agents_status):
+    def learn(self, batch_size, top_level_batch_size, gamma, agents_status, step):
         """Learn from the replay buffer"""
         
         # top level agent
@@ -177,6 +178,11 @@ class GB_MARL:
         self.top_level_agent.update_actor(top_level_actor_loss + 1e-3 * top_level_actor_loss_pse) # update the actor network
         self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
         
+        wandb.log({
+            "critic loss:": top_critic_loss.item(),
+            "actor loss": top_level_actor_loss.item()
+        }, step=step)
+
         
         top_level_next_action = int(torch.mean(top_level_next_act).item() >= 0.5)
         top_level_action = int(torch.mean(top_level_act).item() >= 0.5)
