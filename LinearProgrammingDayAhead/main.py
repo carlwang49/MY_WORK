@@ -158,15 +158,15 @@ if __name__ == '__main__':
                     current_energy += energy if action == 'charge' else -energy
                     current_soc = current_energy / c_k
                     total_cost += cost
-                    
+
                     soc_history.loc[len(soc_history)] = ({
                         'requestID': ev_request['requestID'],    
                         'current_time': current_time + timedelta(hours=time_intervals[i]),
-                        'soc': round(current_soc, 2),    
-                        'current_energy': round(current_energy, 2),
+                        'soc': initial_soc if time_intervals[i] == time_intervals[0] else current_soc,    
+                        'current_energy': current_energy,
                         'charging_power/discharging_power': -energy if action == 'discharge' else energy,
-                        'cost': round(cost, 2),
-                        'total_cost': round(total_cost, 2)
+                        'cost': cost,
+                        'total_cost': total_cost
                     })
                     total_action_impact[current_time + timedelta(hours=time_intervals[i])] += energy if action == 'charge' else -energy
                     
