@@ -11,3 +11,4 @@ log/
 data_plot/
 saved_models
 .env
+wandb/
