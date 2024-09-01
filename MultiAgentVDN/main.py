@@ -52,7 +52,8 @@ num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 dir_name = DIR_NAME = 'VDN-MARL'
 
 # Define the path to the EV request data
-parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
+parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_v{PARKING_VERSION}_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 
 def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval, max_episodes, max_epsilon,
@@ -178,7 +179,7 @@ if __name__ == '__main__':
             'recurrent': False}
     
     VDNagent, reward_history, epsilon_history, env = train_VDN_agent(**kwargs)
-    result_dir = create_result_dir(f'{DIR_NAME}_alpha{ALPHA}_beta{BETA}_num{NUM_AGENTS}')
+    result_dir = create_result_dir(f'{DIR_NAME}_alpha{ALPHA}_beta{BETA}_num{NUM_AGENTS}_sim_v{PARKING_VERSION}')
     plot_scores_epsilon(reward_history, epsilon_history, result_dir, moving_avg_window = 50)
     
     

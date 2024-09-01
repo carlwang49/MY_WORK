@@ -31,7 +31,8 @@ end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
 # Number of agents and file paths
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
-parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
+parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_v{PARKING_VERSION}_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
 
 # Environment settings
@@ -60,7 +61,7 @@ if __name__ == '__main__':
     total_action_impact = defaultdict(float)
     
     # Create results directory
-    result_dir = create_result_dir(f'DayAheadSchedule_{start_date_without_year}_{end_date_without_year}_num{NUM_AGENTS}')
+    result_dir = create_result_dir(f'DayAheadSchedule_{start_date_without_year}_{end_date_without_year}_num{NUM_AGENTS}_sim_v{PARKING_VERSION}')
     
     # Get real-time price data
     real_time_price = get_rtp_price(start_time, end_time) 

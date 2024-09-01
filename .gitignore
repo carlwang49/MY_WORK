@@ -11,4 +11,9 @@ log/
 data_plot/
 saved_models
 .env
+<<<<<<< Updated upstream
 wandb/
+=======
+wandb/
+latest-run/
+>>>>>>> Stashed changes
