@@ -42,7 +42,7 @@ parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_v{PARKING_VERSION}_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
-dir_name = DIR_NAME = 'GB-MARL-v2-s1'
+dir_name = DIR_NAME = f'GB-MARL-v2-s{PARKING_VERSION}'
 
 if __name__ == '__main__':
    
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     default_config['num_agents'] = num_agents
 
     wandb.init(project=DIR_NAME, config=default_config)
-    wandb.run.name = "GB-MARL-v2"
+    wandb.run.name = DIR_NAME
     wandb.run.save()
     
     # Define the start and end date of the EV request data
@@ -72,12 +72,12 @@ if __name__ == '__main__':
     env, dim_info, top_dim_info = get_env(num_agents, start_time, end_time)
 
     # create a new folder to save the result
-    result_dir = create_result_dir(f'{DIR_NAME}_alpha{alpha}_beta{beta}_num{NUM_AGENTS}_sim_v{PARKING_VERSION}') 
-    # result_dir = create_result_dir(f'{DIR_NAME}') 
+    result_dir = create_result_dir(f'{DIR_NAME}_alpha{alpha}_beta{beta}_num{NUM_AGENTS}_s{PARKING_VERSION}') 
     
     # create MADDPG agent
     gb_marl = GB_MARL(dim_info, top_dim_info, args.buffer_capacity, args.batch_size, 
-                    args.top_level_buffer_capacity, args.top_level_batch_size, args.actor_lr, args.critic_lr, args.epsilon, args.sigma, result_dir) 
+                    args.top_level_buffer_capacity, args.top_level_batch_size, 
+                    args.actor_lr, args.critic_lr, result_dir) 
 
     step = 0  # global step counter
     agent_num = env.num_agents # number of agents
@@ -197,8 +197,16 @@ if __name__ == '__main__':
                 message += f'{agent_id}: {r:>4f}; '
                 sum_reward += r
             message += f'sum reward: {sum_reward}'
+            
             logger.bind(console=True).info(message)
             logger.bind(console=True).info(f'global reward: {curr_global_reward}')
+            wandb.log(
+                {
+                    "episode": episode + 1,
+                    "sum_reward": sum_reward,
+                    "global_reward": curr_global_reward
+                }, step=step
+            )
 
     gb_marl.save(episode_rewards)  # save model
     plot_training_results(episode_rewards, args, result_dir)
@@ -231,8 +239,6 @@ if __name__ == '__main__':
                         top_dim_info=top_dim_info,
                         actor_lr=args.actor_lr,
                         critic_lr=args.critic_lr,
-                        epsilon=args.epsilon,
-                        sigma=args.sigma,
                         res_dir=result_dir,
                         file=os.path.join(result_dir, 'model.pt')
                     )

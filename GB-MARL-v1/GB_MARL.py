@@ -1,5 +1,6 @@
 import os
 import pickle
+import wandb
 import numpy as np
 import torch
 import torch.nn.functional as F 
@@ -13,12 +14,12 @@ from DischargingAgent import DischargingAgent
 
 class GB_MARL:
     def __init__(self, dim_info, top_dim_info, capacity, batch_size, top_level_buffer_capacity, 
-                 top_level_batch_size, actor_lr, critic_lr, epsilon, sigma, res_dir):
+                 top_level_batch_size, actor_lr, critic_lr, res_dir):
         """dim_info: dict, key is agent_id, value is a tuple of obs_dim and act_dim"""
         
         # Top level agent
         top_level_obs_dim, top_level_act_dim = top_dim_info[0], top_dim_info[1] # observation and action dimension of the top level agent
-        self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr, epsilon, sigma) # initialize the top level agent
+        self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr) # initialize the top level agent
         self.top_level_buffer = TopBuffer(top_level_buffer_capacity, top_level_obs_dim, top_level_act_dim, 'cuda') # initialize the top level buffer
         
         self.charging_agent = {} # charging agents
@@ -39,7 +40,7 @@ class GB_MARL:
         self.batch_size = batch_size # batch size
         self.top_level_batch_size = top_level_batch_size # top level batch size
         self.res_dir = res_dir # result directory
-        self.logger = setup_logger(os.path.join(res_dir, 'GB_MARL.log')) # initialize the logger
+        # self.logger = setup_logger(os.path.join(res_dir, 'GB_MARL.log')) # initialize the logger
 
 
     def add(self, obs, global_observation, action, top_level_action, reward, global_reward, next_obs, next_global_observation, done):
@@ -126,18 +127,18 @@ class GB_MARL:
                 o = torch.from_numpy(o).unsqueeze(0).float()
                 a = self.charging_agent[agent].action(o, agents_status[agent])
                 actions[agent] = a.squeeze(0).item()
-                self.logger.info(f'{agent} action: {actions[agent]}')
+                # self.logger.info(f'{agent} action: {actions[agent]}')
         else: # discharging
             for agent, o in obs.items():
                 o = torch.from_numpy(o).unsqueeze(0).float()
                 a = self.discharging_agent[agent].action(o, agents_status[agent])
                 actions[agent] = a.squeeze(0).item()
-                self.logger.info(f'{agent} action: {actions[agent]}')
+                # self.logger.info(f'{agent} action: {actions[agent]}')
                 
         return actions, top_level_action
 
 
-    def learn(self, batch_size, top_level_batch_size, gamma, agents_status):
+    def learn(self, batch_size, top_level_batch_size, gamma, agents_status, step):
         """Learn from the replay buffer"""
         
         for agent_id, agent in self.charging_agent.items(): # learn from the charging buffer
@@ -154,7 +155,12 @@ class GB_MARL:
             actor_loss = -(advantage * agent.critic_value(list(obs.values()), list(act.values()))).mean() # calculate the actor loss using advantage
             actor_loss_pse = torch.pow(logits, 2).mean() # calculate the actor loss pse
             agent.update_actor(actor_loss + 1e-3 * actor_loss_pse) # update the actor network
-            self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
+            # self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
+            
+            wandb.log({
+                "charging agent critic loss:": critic_loss.item(),
+                "charging agent actor loss": actor_loss.item()
+            }, step=step)
             
         for agent_id, agent in self.discharging_agent.items(): # learn from the discharging buffer
             obs, act, reward, next_obs, done, next_act = self.sample(batch_size, agents_status, top_level_action=1)
@@ -170,7 +176,11 @@ class GB_MARL:
             actor_loss = -(advantage * agent.critic_value(list(obs.values()), list(act.values()))).mean() # calculate the actor loss using advantage
             actor_loss_pse = torch.pow(logits, 2).mean()
             agent.update_actor(actor_loss + 1e-3 * actor_loss_pse)
-            self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
+            # self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
+            wandb.log({
+                "discharging agent critic loss:": critic_loss.item(),
+                "discharging agent actor loss": actor_loss.item()
+            }, step=step)
         
         # top level agent
         top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act = self.top_level_sample(top_level_batch_size) # sample transitions from the top level buffer
@@ -185,7 +195,12 @@ class GB_MARL:
         top_level_actor_loss = -(top_advantage * self.top_level_agent.critic_value(top_level_obs, top_level_act)).mean() # calculate the actor loss using advantage
         top_level_actor_loss_pse = torch.pow(top_logits, 2).mean() # calculate the actor loss pse
         self.top_level_agent.update_actor(top_level_actor_loss + 1e-3 * top_level_actor_loss_pse) # update the actor network
-        self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
+        # self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
+        
+        wandb.log({
+            "top agent critic loss:": top_critic_loss.item(),
+            "top agent actor loss": top_level_actor_loss.item()
+        }, step=step)
         
         
     def update_target(self, tau):
@@ -225,13 +240,12 @@ class GB_MARL:
 
 
     @classmethod
-    def load(cls, dim_info, top_dim_info, actor_lr, critic_lr, epsilon, sigma, res_dir, file):
+    def load(cls, dim_info, top_dim_info, actor_lr, critic_lr, res_dir, file):
         """Load the model"""
         # Initialize the instance with required parameters
         instance = cls(dim_info, top_dim_info, capacity=0, batch_size=0, 
                        top_level_buffer_capacity=0, top_level_batch_size=0, 
-                       actor_lr=actor_lr, critic_lr=critic_lr, 
-                       epsilon=epsilon, sigma=sigma, res_dir=res_dir)
+                       actor_lr=actor_lr, critic_lr=critic_lr, res_dir=res_dir)
         data = torch.load(file)
         
         for agent_id, agent in instance.charging_agent.items():

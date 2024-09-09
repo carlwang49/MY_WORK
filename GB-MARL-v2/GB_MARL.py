@@ -13,18 +13,19 @@ from Agent import Agent
 
 class GB_MARL:
     def __init__(self, dim_info, top_dim_info, capacity, batch_size, top_level_buffer_capacity, 
-                 top_level_batch_size, actor_lr, critic_lr, epsilon, sigma, res_dir):
+                 top_level_batch_size, actor_lr, critic_lr, res_dir):
         """dim_info: dict, key is agent_id, value is a tuple of obs_dim and act_dim"""
+        
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
         # Top level agent
         top_level_obs_dim, top_level_act_dim = top_dim_info[0], top_dim_info[1] # observation and action dimension of the top level agent
-        self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr, epsilon, sigma) # initialize the top level agent
+        self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr) # initialize the top level agent
         self.top_level_buffer = TopBuffer(top_level_buffer_capacity, top_level_obs_dim, top_level_act_dim, 'cuda') # initialize the top level buffer
         
         # create Agent(actor-critic) and replay buffer for each agent
         self.agents = {}
         self.buffers = {}
-        
         global_obs_act_dim = sum(sum(val) for val in dim_info.values()) # global observation and action dimension
         # dim_info is a dict with agent_id as key and (obs_dim, act_dim) as value
         for agent_id, (obs_dim, act_dim) in dim_info.items():
@@ -35,7 +36,7 @@ class GB_MARL:
         self.batch_size = batch_size # batch size
         self.top_level_batch_size = top_level_batch_size # top level batch size
         self.res_dir = res_dir # result directory
-        self.logger = setup_logger(os.path.join(res_dir, 'GB_MARL.log')) # initialize the logger
+        # self.logger = setup_logger(os.path.join(res_dir, 'GB_MARL.log')) # initialize the logger
 
 
     def add(self, obs, global_observation, action, top_level_action, reward, global_reward, 
@@ -99,7 +100,7 @@ class GB_MARL:
             # NOTE that the output is a tensor, convert it to int before input to the environment
             # actions[agent] = a.squeeze(0).argmax().item()
             actions[agent] = a.squeeze(0).item()
-            self.logger.info(f'{agent} action: {actions[agent]}')
+            # self.logger.info(f'{agent} action: {actions[agent]}')
         
         return actions
     
@@ -176,11 +177,11 @@ class GB_MARL:
         top_level_actor_loss = -self.top_level_agent.critic_value(top_level_obs, top_level_act).mean() # calculate the actor loss using advantage
         top_level_actor_loss_pse = torch.pow(top_logits, 2).mean() # calculate the actor loss pse
         self.top_level_agent.update_actor(top_level_actor_loss + 1e-3 * top_level_actor_loss_pse) # update the actor network
-        self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
+        # self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
         
         wandb.log({
-            "critic loss:": top_critic_loss.item(),
-            "actor loss": top_level_actor_loss.item()
+            "top agent critic loss:": top_critic_loss.item(),
+            "top agent actor loss": top_level_actor_loss.item()
         }, step=step)
 
         
@@ -211,7 +212,12 @@ class GB_MARL:
             actor_loss = -lcb.mean()
             actor_loss_pse = torch.pow(logits, 2).mean()
             agent.update_actor(actor_loss + 1e-3 * actor_loss_pse) # update actor
-            self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
+            # self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
+            
+            wandb.log({
+                "low agent critic loss:": critic_loss.item(),
+                "low agent actor loss": actor_loss.item()
+            }, step=step)
         
     def LCB(self, actions_critics_values, actions, obs_agent_id, current_hour_agent_id, epsilon=1e-8):
         """Calculate the LCB"""
@@ -271,13 +277,12 @@ class GB_MARL:
 
 
     @classmethod
-    def load(cls, dim_info, top_dim_info, actor_lr, critic_lr, epsilon, sigma, res_dir, file):
+    def load(cls, dim_info, top_dim_info, actor_lr, critic_lr, res_dir, file):
         """Load the model"""
         # Initialize the instance with required parameters
         instance = cls(dim_info, top_dim_info, capacity=0, batch_size=0, 
                        top_level_buffer_capacity=0, top_level_batch_size=0, 
-                       actor_lr=actor_lr, critic_lr=critic_lr, 
-                       epsilon=epsilon, sigma=sigma, res_dir=res_dir)
+                       actor_lr=actor_lr, critic_lr=critic_lr, res_dir=res_dir)
         data = torch.load(file)
         
         for agent_id, agent in instance.agents.items():
