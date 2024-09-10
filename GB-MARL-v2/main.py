@@ -1,3 +1,4 @@
+import wandb
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -37,18 +38,31 @@ test_end_time = TEST_END_TIME = datetime.strptime(test_end_date, '%Y-%m-%d')
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 
 # Define the path to the EV request data
-parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
+parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_v{PARKING_VERSION}_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
-dir_name = DIR_NAME = 'GB-MARL-v2'
+dir_name = DIR_NAME = f'GB-MARL-v2-s{PARKING_VERSION}'
 
 if __name__ == '__main__':
-    
+   
     # set seed
-    set_seed(42)
+    set_seed(30)
     
     # parse arguments
     args = parse_args()
+    default_config = vars(args)
+    default_config['alpha'] = alpha
+    default_config['beta'] = beta
+    default_config['start_date'] = start_date
+    default_config['end_date'] = end_date
+    default_config['test_start_date'] = test_start_date
+    default_config['test_end_date'] = test_end_date
+    default_config['num_agents'] = num_agents
+
+    wandb.init(project=DIR_NAME, config=default_config)
+    wandb.run.name = DIR_NAME
+    wandb.run.save()
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
@@ -58,12 +72,12 @@ if __name__ == '__main__':
     env, dim_info, top_dim_info = get_env(num_agents, start_time, end_time)
 
     # create a new folder to save the result
-    result_dir = create_result_dir(f'{DIR_NAME}_alpha{alpha}_beta{beta}_num{NUM_AGENTS}') 
-    # result_dir = create_result_dir(f'{DIR_NAME}') 
+    result_dir = create_result_dir(f'{DIR_NAME}_alpha{alpha}_beta{beta}_num{NUM_AGENTS}_s{PARKING_VERSION}') 
     
     # create MADDPG agent
     gb_marl = GB_MARL(dim_info, top_dim_info, args.buffer_capacity, args.batch_size, 
-                    args.top_level_buffer_capacity, args.top_level_batch_size, args.actor_lr, args.critic_lr, args.epsilon, args.sigma, result_dir) 
+                    args.top_level_buffer_capacity, args.top_level_batch_size, 
+                    args.actor_lr, args.critic_lr, result_dir) 
 
     step = 0  # global step counter
     agent_num = env.num_agents # number of agents
@@ -147,7 +161,7 @@ if __name__ == '__main__':
 
             # add experience to replay buffer
             gb_marl.add(obs, global_observation, actions, top_level_action, reward, 
-                       global_reward, next_obs, next_global_observation, done)
+                       global_reward, next_obs, next_global_observation, env.timestamp.hour, done)
             
             # update reward
             for agent_id, r in reward.items():  
@@ -158,7 +172,7 @@ if __name__ == '__main__':
             
             # learn from the replay buffer
             if step >= args.random_steps and step % args.learn_interval == 0:  # learn every few steps
-                gb_marl.learn(args.batch_size, args.top_level_batch_size, args.gamma, env.agents_status) # learn from the replay buffer
+                gb_marl.learn(args.batch_size, args.top_level_batch_size, args.gamma, env.agents_status, step) # learn from the replay buffer
                 gb_marl.update_target(args.tau) # update target network
                 
             # update observation
@@ -183,8 +197,16 @@ if __name__ == '__main__':
                 message += f'{agent_id}: {r:>4f}; '
                 sum_reward += r
             message += f'sum reward: {sum_reward}'
+            
             logger.bind(console=True).info(message)
             logger.bind(console=True).info(f'global reward: {curr_global_reward}')
+            wandb.log(
+                {
+                    "episode": episode + 1,
+                    "sum_reward": sum_reward,
+                    "global_reward": curr_global_reward
+                }, step=step
+            )
 
     gb_marl.save(episode_rewards)  # save model
     plot_training_results(episode_rewards, args, result_dir)
@@ -217,8 +239,6 @@ if __name__ == '__main__':
                         top_dim_info=top_dim_info,
                         actor_lr=args.actor_lr,
                         critic_lr=args.critic_lr,
-                        epsilon=args.epsilon,
-                        sigma=args.sigma,
                         res_dir=result_dir,
                         file=os.path.join(result_dir, 'model.pt')
                     )

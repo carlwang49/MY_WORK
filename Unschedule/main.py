@@ -31,7 +31,8 @@ end_time = END_TIME = end_datetime
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 
 # Define the path to the EV request data
-parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
+parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_v{PARKING_VERSION}_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
 # dir_name = DIR_NAME = 'GB-MARL-Discrete'
@@ -46,7 +47,7 @@ if __name__ == '__main__':
     set_seed(42)
     
     # Create a directory for storing results of the simulation
-    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}')
+    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}_sim_v{PARKING_VERSION}')
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)

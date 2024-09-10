@@ -7,7 +7,6 @@ from utilities import prepare_ev_request_data, prepare_ev_departure_data, create
 from EVBuildingEnv import EVBuildingEnv
 from dotenv import load_dotenv
 import os
-import torch
 
 load_dotenv()
 
@@ -37,7 +36,8 @@ num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 dir_name = DIR_NAME = 'IQL-MARL'
 
 # Define the path to the EV request data
-parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
+parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_v{PARKING_VERSION}_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # HYPERPARAMETERS
 N_AGENTS = NUM_AGENTS
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     agents, reward_history, epsilon_history, env = train_QL_agents(N_AGENTS, NUM_EPISODES, EPS_DECAY,
                                                           EPS_MIN, STEP_SIZE, GAMMA)
     
-    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}')
+    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}_sim_v{PARKING_VERSION}')
     plot_scores_epsilon(reward_history, epsilon_history, result_dir, moving_avg_window = 50)
     
     # Save the Q-learning agents

@@ -31,7 +31,8 @@ end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
 # Number of agents and file paths
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
-parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
+parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_v{PARKING_VERSION}_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
 
 # Environment settings
@@ -60,7 +61,7 @@ if __name__ == '__main__':
     total_action_impact = defaultdict(float)
     
     # Create results directory
-    result_dir = create_result_dir(f'DayAheadSchedule_{start_date_without_year}_{end_date_without_year}_num{NUM_AGENTS}')
+    result_dir = create_result_dir(f'DayAheadSchedule_{start_date_without_year}_{end_date_without_year}_num{NUM_AGENTS}_sim_v{PARKING_VERSION}')
     
     # Get real-time price data
     real_time_price = get_rtp_price(start_time, end_time) 
@@ -158,15 +159,15 @@ if __name__ == '__main__':
                     current_energy += energy if action == 'charge' else -energy
                     current_soc = current_energy / c_k
                     total_cost += cost
-                    
+
                     soc_history.loc[len(soc_history)] = ({
                         'requestID': ev_request['requestID'],    
                         'current_time': current_time + timedelta(hours=time_intervals[i]),
-                        'soc': round(current_soc, 2),    
-                        'current_energy': round(current_energy, 2),
+                        'soc': initial_soc if time_intervals[i] == time_intervals[0] else current_soc,    
+                        'current_energy': current_energy,
                         'charging_power/discharging_power': -energy if action == 'discharge' else energy,
-                        'cost': round(cost, 2),
-                        'total_cost': round(total_cost, 2)
+                        'cost': cost,
+                        'total_cost': total_cost
                     })
                     total_action_impact[current_time + timedelta(hours=time_intervals[i])] += energy if action == 'charge' else -energy
                     

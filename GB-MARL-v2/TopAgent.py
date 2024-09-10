@@ -4,7 +4,7 @@ from torch.optim import Adam
 from copy import deepcopy
 
 class TopAgent:
-    def __init__(self, obs_dim, act_dim, actor_lr, critic_lr, epsilon=0.1, sigma=0.2):
+    def __init__(self, obs_dim, act_dim, actor_lr, critic_lr):
         """Initialize the Top agent"""
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.actor = MLPNetwork(obs_dim, act_dim).to(self.device) # actor network
