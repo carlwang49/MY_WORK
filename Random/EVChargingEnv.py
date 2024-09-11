@@ -54,6 +54,7 @@ class EVChargingEnv:
         # Initialize a DataFrame to store charging records and SoC history
         self.charging_records = pd.DataFrame(columns=['requestID', 
                                                       'arrival_time', 
+                                                      'original_departure_time',
                                                       'departure_time', 
                                                       'initial_soc', 
                                                       'departure_soc',
@@ -111,14 +112,15 @@ class EVChargingEnv:
             logger.bind(console=True).warning("No available charging piles.")
             return None
         
-    def remove_ev(self, agent_idx):
+    def remove_ev(self, agent_idx, ev_departure_time, current_time: datetime):
         if self.current_parking[agent_idx]:
             self.current_parking[agent_idx] = False  # Disconnect the selected charging pile
             # Record the charging history
             self.charging_records.loc[len(self.charging_records)] = {
                 'requestID': self.ev_data[agent_idx]['requestID'],
                 'arrival_time': self.ev_data[agent_idx]['arrival_time'],
-                'departure_time': self.ev_data[agent_idx]['departure_time'],
+                'original_departure_time': self.ev_data[agent_idx]['departure_time'],
+                'departure_time': ev_departure_time,
                 'departure_soc': self.ev_data[agent_idx]['departure_soc'], # Add 'departure_soc' to the charging_records DataFrame
                 'initial_soc': self.ev_data[agent_idx]['initial_soc'],
                 'final_soc': self.ev_data[agent_idx]['soc'],
@@ -202,6 +204,7 @@ class EVChargingEnv:
         # Reset the charging records and SoC history
         self.charging_records = pd.DataFrame(columns=['requestID', 
                                                       'arrival_time', 
+                                                      'original_departure_time',
                                                       'departure_time', 
                                                       'initial_soc', 
                                                       'departure_soc',

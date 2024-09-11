@@ -2,7 +2,7 @@ from EVChargingEnv import EVChargingEnv
 import numpy as np
 from datetime import datetime, timedelta
 from logger_config import configured_logger as logger
-from utils import prepare_ev_request_data, prepare_ev_departure_data, create_result_dir, set_seed
+from utils import prepare_ev_request_data, prepare_ev_departure_data, prepare_ev_actual_departure_data, create_result_dir, set_seed
 import pandas as pd
 from dotenv import load_dotenv
 import os
@@ -51,7 +51,8 @@ if __name__ == '__main__':
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
-    ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
+    ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date) \
+        if parking_version == '0' else prepare_ev_actual_departure_data(parking_data_path, start_date, end_date)
     
     # Set random seed for reproducibility and create an EV charging environment
     env = EVChargingEnv(num_agents, start_time, end_time)
@@ -79,7 +80,9 @@ if __name__ == '__main__':
         if current_departures:
             for ev in current_departures:
                 agent_idx = np.where([ev['requestID'] == data['requestID'] for data in env.ev_data])[0][0]
-                env.remove_ev(agent_idx)
+                ev_departure_time = ev['departure_time'] if parking_version == '0' \
+                            else ev['actual_departure_time']
+                env.remove_ev(agent_idx, ev_departure_time, env.timestamp)
                 env.current_parking_number -= 1
                 
         # Update the SoC of each connected EV

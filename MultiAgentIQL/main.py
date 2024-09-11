@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from utils.plot_results import plot_scores_epsilon
 from QLearningAgent import QLearningAgent
-from utilities import prepare_ev_request_data, prepare_ev_departure_data, create_result_dir, set_seed
+from utilities import prepare_ev_request_data, prepare_ev_departure_data, prepare_ev_actual_departure_data, create_result_dir, set_seed
 from EVBuildingEnv import EVBuildingEnv
 from dotenv import load_dotenv
 import os
@@ -55,7 +55,8 @@ def train_QL_agents(n_agents, num_episodes, eps_decay, eps_min, step_size, gamma
 
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
-    ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
+    ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date) \
+        if parking_version == '0' else prepare_ev_actual_departure_data(parking_data_path, start_date, end_date)
 
     # create env.
     env = EVBuildingEnv(num_agents, start_time, end_time)
@@ -116,7 +117,9 @@ def train_QL_agents(n_agents, num_episodes, eps_decay, eps_min, step_size, gamma
                 request_id = ev['requestID']
                 for agent_id, data in env.ev_data.items():
                     if data['requestID'] == request_id:
-                        env.remove_ev(agent_id)
+                        ev_departure_time = ev['departure_time'] if parking_version == '0' \
+                            else ev['actual_departure_time']
+                        env.remove_ev(agent_id, ev_departure_time, env.timestamp)
                         env.current_parking_number -= 1
                         break 
                     
@@ -181,7 +184,8 @@ if __name__ == '__main__':
     
     # Define the start and end date of the EV request data for testing
     test_ev_request_dict = prepare_ev_request_data(parking_data_path, test_start_date, test_end_date)
-    test_ev_departure_dict = prepare_ev_departure_data(parking_data_path, test_start_date, test_end_date)
+    test_ev_departure_dict = prepare_ev_departure_data(parking_data_path, test_start_date, test_end_date) \
+        if parking_version == '0' else prepare_ev_actual_departure_data(parking_data_path, test_start_date, test_end_date)
 
     # create test env.
     test_env = EVBuildingEnv(num_agents, test_start_time, test_end_time)
@@ -214,7 +218,9 @@ if __name__ == '__main__':
             request_id = ev['requestID']
             for agent_id, data in test_env.ev_data.items():
                 if data['requestID'] == request_id:
-                    test_env.remove_ev(agent_id)
+                    ev_departure_time = ev['departure_time'] if parking_version == '0' \
+                            else ev['actual_departure_time']
+                    test_env.remove_ev(agent_id, ev_departure_time, test_env.timestamp)
                     test_env.current_parking_number -= 1
                     break 
 
