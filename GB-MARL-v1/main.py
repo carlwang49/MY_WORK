@@ -42,7 +42,7 @@ parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
 parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_v{PARKING_VERSION}_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
-dir_name = DIR_NAME = f'GB-MARL-v1-s{PARKING_VERSION}'
+dir_name = DIR_NAME = f'GB-MARL-v1'
 # dir_name = DIR_NAME = 'TEST'
 
 if __name__ == '__main__':
