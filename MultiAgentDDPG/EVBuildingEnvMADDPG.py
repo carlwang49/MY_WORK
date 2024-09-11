@@ -96,6 +96,7 @@ class EVBuildingEnv(EVChargingEnv):
         # Initialize the charging records and SoC history
         self.charging_records = pd.DataFrame(columns=['requestID', 
                                                       'arrival_time', 
+                                                      'original_departure_time',
                                                       'departure_time', 
                                                       'initial_soc', 
                                                       'departure_soc',
@@ -292,6 +293,7 @@ class EVBuildingEnv(EVChargingEnv):
         # Reset the charging records and SoC history
         self.charging_records = pd.DataFrame(columns=['requestID', 
                                                       'arrival_time', 
+                                                      'original_departure_time',
                                                       'departure_time', 
                                                       'initial_soc', 
                                                       'departure_soc',
@@ -433,7 +435,7 @@ class EVBuildingEnv(EVChargingEnv):
             logger.bind(console=True).warning("No available charging piles.")
             return None
         
-    def remove_ev(self, agent_id):
+    def remove_ev(self, agent_id, ev_departure_time, current_time: datetime):
         if self.agents_status[agent_id]:
             self.agents_status[agent_id] = False  # Disconnect the selected charging pile
             
@@ -441,7 +443,8 @@ class EVBuildingEnv(EVChargingEnv):
             self.charging_records.loc[len(self.charging_records)] = {
                 'requestID': self.ev_data[agent_id]['requestID'],
                 'arrival_time': self.ev_data[agent_id]['arrival_time'],
-                'departure_time': self.ev_data[agent_id]['departure_time'],
+                'original_departure_time': self.ev_data[agent_id]['departure_time'],
+                'departure_time': ev_departure_time,
                 'initial_soc': self.ev_data[agent_id]['initial_soc'],
                 'departure_soc': self.ev_data[agent_id]['departure_soc'], # Add 'departure_soc' to the charging_records DataFrame
                 'final_soc': self.ev_data[agent_id]['soc'],
@@ -452,12 +455,11 @@ class EVBuildingEnv(EVChargingEnv):
             # Record the SoC history
             self.soc_history.loc[len(self.soc_history)] = ({
                 'requestID': self.ev_data[agent_id]['requestID'],  # Add 'requestID' to the soc_history DataFrame
-                'current_time': self.ev_data[agent_id]['departure_time'], # Add the current time to the soc_history DataFrame
+                'current_time': current_time, # Add the current time to the soc_history DataFrame
                 'soc': self.ev_data[agent_id]['soc'], # Add the current SoC to the soc_history DataFrame
                 'SoC_upper_bound': self.SoC_upper_bound_dict[agent_id], # Add the upper bound of SoC to the soc_history DataFrame
                 'SoC_lower_bound': self.Soc_lower_bound_dict[agent_id]  # Add the lower bound of SoC to the soc_history DataFrame
             })
-            
             
             # Reset EV data for the selected charging pile
             self.ev_data[agent_id] = {'requestID': None, 

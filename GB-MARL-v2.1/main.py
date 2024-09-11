@@ -8,7 +8,7 @@ from logger_config import configured_logger as logger
 from GB_MARL_parameter import parse_args, get_env
 from utils import (prepare_ev_request_data, create_result_dir, 
                    prepare_ev_departure_data, plot_training_results, 
-                   plot_global_training_results, set_seed)
+                   plot_global_training_results, prepare_ev_actual_departure_data, set_seed)
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -66,7 +66,8 @@ if __name__ == '__main__':
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
-    ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
+    ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date) \
+        if parking_version == '0' else prepare_ev_actual_departure_data(parking_data_path, start_date, end_date)
     
     # create environment
     env, dim_info, top_dim_info = get_env(num_agents, start_time, end_time)
@@ -127,7 +128,9 @@ if __name__ == '__main__':
             for ev in current_departures:
                 for agent_id, data in env.ev_data.items():
                     if ev['requestID'] == data['requestID']:
-                        env.remove_ev(agent_id)
+                        ev_departure_time = ev['departure_time'] if parking_version == '0' \
+                            else ev['actual_departure_time']
+                        env.remove_ev(agent_id, ev_departure_time, env.timestamp)
                         env.current_parking_number -= 1 # decrease the number of EVs in the environment
             
             # select actions
@@ -228,7 +231,8 @@ if __name__ == '__main__':
     # ==========================
     
     testing_ev_request_dict = prepare_ev_request_data(parking_data_path, test_start_date, test_end_date)
-    testing_ev_departure_dict = prepare_ev_departure_data(parking_data_path, test_start_date, test_end_date)
+    testing_ev_departure_dict = prepare_ev_departure_data(parking_data_path, test_start_date, test_end_date) \
+        if parking_version == '0' else prepare_ev_actual_departure_data(parking_data_path, test_start_date, test_end_date)
     
     # Create environment for testing (September 1st to September 7th)
     test_env, _, _ = get_env(num_agents, test_start_time, test_end_time)
@@ -265,7 +269,9 @@ if __name__ == '__main__':
         for ev in current_departures:
             for agent_id, data in test_env.ev_data.items():
                 if ev['requestID'] == data['requestID']:
-                    test_env.remove_ev(agent_id)
+                    ev_departure_time = ev['departure_time'] if parking_version == '0' \
+                            else ev['actual_departure_time']
+                    test_env.remove_ev(agent_id, ev_departure_time, test_env.timestamp)
                     test_env.current_parking_number -= 1
         
         top_level_action = gb_marl.select_top_level_action(global_observation)
