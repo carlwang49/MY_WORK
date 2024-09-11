@@ -1,5 +1,5 @@
-
 import numpy as np
+import pickle
 
 class QLearningAgent():
 
@@ -20,10 +20,9 @@ class QLearningAgent():
 
         
     def agent_start(self, state):
-
-        #Update epsilon at the start of each episode
+        # Update epsilon at the start of each episode
         self.epsilon = max(self.epsilon * self.eps_decay, self.eps_min)
-        #Add state to dict if new + get index of state
+        # Add state to dict if new + get index of state
         if state not in self.state_dict.keys():
             self.state_dict[state] = len(self.state_dict)
         state_idx = self.state_dict[state]
@@ -40,8 +39,7 @@ class QLearningAgent():
         return action
     
     def agent_step(self, reward, state):
-
-        #Add state to dict if new + get index of state
+        # Add state to dict if new + get index of state
         if state not in self.state_dict.keys():
             self.state_dict[state] = len(self.state_dict)
         state_idx = self.state_dict[state]
@@ -62,7 +60,7 @@ class QLearningAgent():
         return action
     
     def agent_end(self, state, reward):
-        #Add state to dict if new + get index
+        # Add state to dict if new + get index
         if state not in self.state_dict.keys():
             self.state_dict[state] = len(self.state_dict)
         state_idx = self.state_dict[state]
@@ -73,8 +71,7 @@ class QLearningAgent():
 
     # Takes step in testing environment, epsilon=0 and no updates made
     def test_step(self, state):
-        
-        #Add state to dict if new + get index of state
+        # Add state to dict if new + get index of state
         if state not in self.state_dict.keys():
             self.state_dict[state] = len(self.state_dict)
         state_idx = self.state_dict[state]
@@ -99,3 +96,30 @@ class QLearningAgent():
                 ties.append(i)
 
         return self.rand_generator.choice(ties)
+
+    def save(self, filepath):
+        """Save the Q-learning agent's state."""
+        with open(filepath, 'wb') as f:
+            pickle.dump({
+                'q_table': self.q,
+                'state_dict': self.state_dict,
+                'epsilon': self.epsilon,
+                'eps_decay': self.eps_decay,
+                'eps_min': self.eps_min,
+                'step_size': self.step_size,
+                'gamma': self.gamma
+            }, f)
+        print(f"Agent saved to {filepath}")
+
+    def load(self, filepath):
+        """Load the Q-learning agent's state."""
+        with open(filepath, 'rb') as f:
+            data = pickle.load(f)
+            self.q = data['q_table']
+            self.state_dict = data['state_dict']
+            self.epsilon = data['epsilon']
+            self.eps_decay = data['eps_decay']
+            self.eps_min = data['eps_min']
+            self.step_size = data['step_size']
+            self.gamma = data['gamma']
+        print(f"Agent loaded from {filepath}")

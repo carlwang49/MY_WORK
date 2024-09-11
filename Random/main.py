@@ -2,14 +2,14 @@ from EVChargingEnv import EVChargingEnv
 import numpy as np
 from datetime import datetime, timedelta
 from logger_config import configured_logger as logger
-from utils import prepare_ev_request_data, prepare_ev_departure_data, create_result_dir
+from utils import prepare_ev_request_data, prepare_ev_departure_data, prepare_ev_actual_departure_data, create_result_dir, set_seed
 import pandas as pd
 from dotenv import load_dotenv
 import os
 load_dotenv()
 
-start_datetime_str = os.getenv('START_DATETIME', '2018-07-01')
-end_datetime_str = os.getenv('END_DATETIME', '2018-10-01')
+start_datetime_str = os.getenv('TEST_START_DATETIME', '2018-10-01')
+end_datetime_str = os.getenv('TEST_END_DATETIME', '2018-10-07')
 
 # Define the start and end datetime of the EV request data
 start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%d')
@@ -18,9 +18,10 @@ end_datetime = datetime.strptime(end_datetime_str, '%Y-%m-%d')
 # Define the start and end date of the EV request data
 start_date = START_DATE = str(start_datetime.date())
 end_date = END_DATE = str(end_datetime.date())
+end_date_minus_one = END_DATE_MINUS_ONE = str((datetime.strptime(END_DATE, '%Y-%m-%d') - timedelta(days=1)).date())
 
 start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
-end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
+end_date_without_year = END_DATE_MINUS_ONE[5:]
 
 # Define the start and end time of the EV request data
 start_time = START_TIME = start_datetime
@@ -30,7 +31,8 @@ end_time = END_TIME = end_datetime
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 
 # Define the path to the EV request data
-parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
+parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
+parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data_v{PARKING_VERSION}_from_2018-07-01_to_2018-12-31_{NUM_AGENTS}.csv'
 
 # Define the directory name to save the result
 # dir_name = DIR_NAME = 'GB-MARL-Discrete'
@@ -41,12 +43,16 @@ if __name__ == '__main__':
     """
     Run a simulation of the EV charging environment with random EV request data and random charging power selection.
     """
+    # Set random seed for reproducibility
+    set_seed(42)
+    
     # Create a directory for storing results of the simulation
-    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}')
+    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}_sim_v{PARKING_VERSION}')
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
-    ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date)
+    ev_departure_dict = prepare_ev_departure_data(parking_data_path, start_date, end_date) \
+        if parking_version == '0' else prepare_ev_actual_departure_data(parking_data_path, start_date, end_date)
     
     # Set random seed for reproducibility and create an EV charging environment
     env = EVChargingEnv(num_agents, start_time, end_time)
@@ -76,7 +82,9 @@ if __name__ == '__main__':
         # Remove EVs that departed at the current time
         for ev in current_departures:
             agent_idx = np.where([ev['requestID'] == data['requestID'] for data in env.ev_data])[0][0]
-            env.remove_ev(agent_idx)
+            ev_departure_time = ev['departure_time'] if parking_version == '0' \
+                            else ev['actual_departure_time']
+            env.remove_ev(agent_idx, ev_departure_time, env.timestamp)
             env.current_parking_number -= 1 # decrease the number of EVs in the environment
                 
         # Update the SoC of each connected EV
@@ -110,3 +118,5 @@ if __name__ == '__main__':
     load_history_df = pd.DataFrame(env.load_history)
     load_history_file = f'{result_dir}/building_loading_history.csv'
     load_history_df.to_csv(load_history_file, index=False)
+    
+    print(f'Test results and histories saved to {result_dir}')

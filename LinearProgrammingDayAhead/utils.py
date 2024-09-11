@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import datetime, timedelta
+import random
+import torch
 
 def prepare_ev_request_data(parking_data_path, start_date, end_date):
     """
@@ -90,24 +92,40 @@ def get_tou_price(current_time: datetime):
     return tou_price
 
 def get_rtp_price(start_time, end_time):
-    # 读取实时价格数据
+
+    # read real-time price data
     real_time_price = pd.read_csv('../Dataset/RTP/electricity_prices_from_201807010000_to_201812312359.csv')
     real_time_price['datetime'] = pd.to_datetime(real_time_price['datetime'])
     
-    # 筛选所需时间范围的数据
-    real_time_price = real_time_price[(real_time_price['datetime'] >= start_time) & (real_time_price['datetime'] < end_time + timedelta(hours=1))].copy()
+    # filter the data
+    real_time_price = real_time_price[(real_time_price['datetime'] >= start_time) \
+        & (real_time_price['datetime'] <= end_time + timedelta(hours=23))].copy()
     real_time_price.sort_values(by='datetime', inplace=True)
     
-    # 创建完整的时间序列索引
+    # create a full-time index
     full_time_index = pd.date_range(start=start_time, end=end_time, freq='H')
     
-    # 将数据框设置为时间索引
+    # set the datetime column as the index
     real_time_price.set_index('datetime', inplace=True)
     
-    # 使用完整的时间索引重新索引数据框，并使用前向填充方法填充缺失值
+    # reindex the data
     real_time_price = real_time_price.reindex(full_time_index).ffill().reset_index()
     
-    # 重命名列
+    # rename the index column
     real_time_price.rename(columns={'index': 'datetime'}, inplace=True)
     
     return real_time_price
+
+"""set the building load time range for the environment"""
+def set_building_time_range(building_load, start_time: datetime, end_time: datetime):
+    building_load = building_load[(building_load['Date'] >= start_time) & (building_load['Date'] <= end_time)].copy()
+    building_load.sort_values(by='Date', inplace=True)
+    return building_load
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
