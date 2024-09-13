@@ -48,7 +48,7 @@ dir_name = DIR_NAME = f'GB-MARL-v2'
 if __name__ == '__main__':
    
     # set seed
-    set_seed(30)
+    set_seed(42)
     
     # parse arguments
     args = parse_args()
