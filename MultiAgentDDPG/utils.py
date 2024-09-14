@@ -99,7 +99,7 @@ def create_result_dir(method_name='MADDPG'):
     Returns:
         str: The path of the created result directory.
     """
-    env_dir = os.path.join('../Result', method_name)
+    env_dir = os.path.join('../Results', method_name)
     
     if not os.path.exists(env_dir):
         os.makedirs(env_dir)
