@@ -42,11 +42,12 @@ parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data
 
 # Define the directory name to save the result
 dir_name = DIR_NAME = 'MADDPG'
+random_seed = RANDOM_SEED = int(os.getenv('RANDOM_SEED'))
 
 if __name__ == '__main__':
     
     # set seed
-    set_seed(30)
+    set_seed(random_seed)
     
     # parse arguments
     args = parse_args()
