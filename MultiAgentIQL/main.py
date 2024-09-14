@@ -51,7 +51,7 @@ GAMMA = float(os.getenv('GAMMA'))
 def train_QL_agents(n_agents, num_episodes, eps_decay, eps_min, step_size, gamma):
     
     # set seed
-    set_seed(42)
+    set_seed(30)
 
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)

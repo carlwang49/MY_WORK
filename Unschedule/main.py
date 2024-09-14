@@ -44,7 +44,7 @@ if __name__ == '__main__':
     Run a simulation of the EV charging environment with random EV request data and random charging power selection.
     """
     # Set random seed for reproducibility
-    set_seed(42)
+    set_seed(30)
     
     # Create a directory for storing results of the simulation
     result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}_sim_v{PARKING_VERSION}')

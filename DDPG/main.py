@@ -54,7 +54,7 @@ episode_rewards = EPISODE_REWARDS = defaultdict(int)  # Record the rewards durin
 if __name__ == '__main__':
     
     # set seed
-    set_seed(42)
+    set_seed(30)
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
