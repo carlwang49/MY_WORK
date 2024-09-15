@@ -242,7 +242,7 @@ class GB_MARL:
         # Calculate the LCB term
         rho = 1
         sqrt_term = clamp_and_check_nan(torch.sqrt(SoC_diff * (time_remaining / time_diff)), epsilon, actions.device)
-        lcb = actions_critics_values - rho * actions_critics_values * torch.abs(torch.log2(safe_actions)) * sqrt_term
+        lcb = actions_critics_values - actions_critics_values * torch.abs(torch.log2(safe_actions)) * sqrt_term
 
         return lcb
 
