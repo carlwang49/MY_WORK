@@ -6,7 +6,7 @@ import warnings
 warnings.filterwarnings('ignore')
 from scipy.optimize import linprog
 from logger_config import configured_logger as logger
-from utils import create_result_dir, get_num_of_evs_in_each_hours, get_rtp_price, set_building_time_range
+from utils import create_result_dir, get_num_of_evs_in_each_hours, get_rtp_price, set_building_time_range, set_seed
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -43,8 +43,16 @@ eta = ETA = float(os.getenv('CHARGING_EFFICIENCY', 0.95))
 max_charging_power = MAX_CHARGING_POWER = int(os.getenv('MAX_CHARGING_POWER', 150))  
 max_discharging_power = MAX_DISCHARGING_POWER = int(os.getenv('MAX_DISCHARGING_POWER', -150))  
 
+
+dir_name = DIR_NAME = 'DayAhead'
+random_seed = RANDOM_SEED = int(os.getenv('RANDOM_SEED'))
+
 if __name__ == '__main__':
     # Initialize dataframes
+    
+    # set seed
+    set_seed(RANDOM_SEED)
+    
     charging_records = pd.DataFrame(columns=['requestID', 'arrival_time', 'departure_time', 'initial_soc', 'departure_soc', 'final_soc', 'charging_power', 'charging_time']) 
     soc_history = pd.DataFrame(columns=['requestID', 'current_time', 'soc', 'current_energy', 'charging_power/discharging_power', 'cost', 'total_cost']) 
     
@@ -61,7 +69,7 @@ if __name__ == '__main__':
     total_action_impact = defaultdict(float)
     
     # Create results directory
-    result_dir = create_result_dir(f'DayAheadSchedule_{start_date_without_year}_{end_date_without_year}_num{NUM_AGENTS}_sim_v{PARKING_VERSION}')
+    result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_num{NUM_AGENTS}_sim_v{PARKING_VERSION}')
     
     # Get real-time price data
     real_time_price = get_rtp_price(start_time, end_time) 

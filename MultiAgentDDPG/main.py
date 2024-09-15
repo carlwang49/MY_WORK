@@ -47,7 +47,7 @@ random_seed = RANDOM_SEED = int(os.getenv('RANDOM_SEED'))
 if __name__ == '__main__':
     
     # set seed
-    set_seed(random_seed)
+    set_seed(RANDOM_SEED)
     
     # parse arguments
     args = parse_args()

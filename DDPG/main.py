@@ -44,6 +44,7 @@ parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data
 
 # Define the directory name to save the result
 dir_name = DIR_NAME = 'DDPG'
+random_seed = RANDOM_SEED = int(os.getenv('RANDOM_SEED'))
 
 # Define hyperparameters
 random_steps = RANDOM_STEPS  = int(float(os.getenv('RANDOM_STEPS')))  # Take the random actions in the beginning for the better exploration
@@ -54,7 +55,7 @@ episode_rewards = EPISODE_REWARDS = defaultdict(int)  # Record the rewards durin
 if __name__ == '__main__':
     
     # set seed
-    set_seed(30)
+    set_seed(RANDOM_SEED)
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)

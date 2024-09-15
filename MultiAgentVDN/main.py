@@ -50,6 +50,7 @@ test_end_time = TEST_END_TIME = datetime.strptime(test_end_date, '%Y-%m-%d')
 # Define the number of agents
 num_agents = NUM_AGENTS = int(os.getenv('NUM_AGENTS'))
 dir_name = DIR_NAME = 'VDN-MARL'
+random_seed = RANDOM_SEED = int(os.getenv('RANDOM_SEED'))
 
 # Define the path to the EV request data
 parking_version = PARKING_VERSION = os.getenv('PARKING_VERSION')
@@ -60,7 +61,7 @@ def train_VDN_agent(env_name, lr, gamma, batch_size, buffer_limit, log_interval,
                     min_epsilon,test_episodes, warm_up_steps, update_iter, chunk_size, update_target_interval,
                     recurrent):
     # set seed
-    set_seed(30)
+    set_seed(RANDOM_SEED)
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)

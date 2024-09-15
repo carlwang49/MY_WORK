@@ -43,12 +43,14 @@ parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data
 
 # Define the directory name to save the result
 dir_name = DIR_NAME = f'GB-MARL-v2'
+random_seed = RANDOM_SEED = int(os.getenv('RANDOM_SEED'))
+
 # dir_name = DIR_NAME = 'TEST'
 
 if __name__ == '__main__':
    
     # set seed
-    set_seed(30)
+    set_seed(RANDOM_SEED)
     
     # parse arguments
     args = parse_args()

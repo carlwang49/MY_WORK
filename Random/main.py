@@ -37,6 +37,7 @@ parking_data_path = PARKING_DATA_PATH = f'../Dataset/Sim_Parking/ev_parking_data
 # Define the directory name to save the result
 # dir_name = DIR_NAME = 'GB-MARL-Discrete'
 dir_name = DIR_NAME = 'RandomPower'
+random_seed = RANDOM_SEED = int(os.getenv('RANDOM_SEED'))
 
 
 if __name__ == '__main__':
@@ -44,7 +45,7 @@ if __name__ == '__main__':
     Run a simulation of the EV charging environment with random EV request data and random charging power selection.
     """
     # Set random seed for reproducibility
-    set_seed(30)
+    set_seed(RANDOM_SEED)
     
     # Create a directory for storing results of the simulation
     result_dir = create_result_dir(f'{DIR_NAME}_{start_date_without_year}_{end_date_without_year}_{NUM_AGENTS}_sim_v{PARKING_VERSION}')
