@@ -323,8 +323,8 @@ class EVBuildingEnv(EVChargingEnv):
         # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
         self.action_spaces = {f'agent_{i}': ActionSpace(0, 1, (1,)) for i in range(self.num_agents)}  
         # self.action_spaces = {f'agent_{i}': DiscreteActionSpace(self.action_values) for i in range(self.num_agents)}  
-        self.charging_action_spaces = {f'agent_{i}': ActionSpace(0.4, 1, (1,)) for i in range(self.num_agents)}
-        self.discharging_action_spaces = {f'agent_{i}': ActionSpace(0, 0.6, (1,)) for i in range(self.num_agents)}
+        self.charging_action_spaces = {f'agent_{i}': ActionSpace(0.3, 1, (1,)) for i in range(self.num_agents)}
+        self.discharging_action_spaces = {f'agent_{i}': ActionSpace(0, 0.7, (1,)) for i in range(self.num_agents)}
         
         # Initialize top level action space
         self.top_level_action_space = TopLevelActionSpace([0, 1])
@@ -406,7 +406,8 @@ class EVBuildingEnv(EVChargingEnv):
         penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
         
         # Calculate the global reward
-        price_cost = -current_price * new_load - penalty
+        penalty_cost = penalty * 1.5
+        price_cost = -current_price * new_load - penalty_cost
         global_reward = log_scale_reward(price_cost) * beta + (1 - beta) * log_scale_reward(load_diff * total_action_impact) 
         
         # Calculate the local reward for each agent
@@ -414,7 +415,7 @@ class EVBuildingEnv(EVChargingEnv):
             P_tk = P_tk_dict[agent_id]
             r_tk = -P_tk * current_price
             r_soc = abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
-            local_reward = alpha * r_tk - (1 - alpha) * r_soc
+            local_reward = alpha * r_tk - (1 - alpha) * r_soc + gamma * global_reward
             rewards[agent_id] = local_reward
             
         return rewards, global_reward
