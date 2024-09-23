@@ -22,3 +22,6 @@ class PriceEnvironment:
 
     def get_current_price(self, timestamp):
         return self.price_dict[timestamp]
+    
+    def max_price(self):
+        return self.real_time_price['average_price'].max()
