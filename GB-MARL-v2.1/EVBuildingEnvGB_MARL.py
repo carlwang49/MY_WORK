@@ -389,37 +389,36 @@ class EVBuildingEnv(EVChargingEnv):
         return observations, global_observation
     
     
-    # def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict):
-    #     """Calculate the reward for each agent and the global reward"""
+    def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict):
+        """Calculate the reward for each agent and the global reward"""
         
-    #     def log_scale_reward(reward, base=10):
-    #         return np.log1p(abs(reward)) / np.log(base + 1e-6) * np.sign(reward)
+        def log_scale_reward(reward, base=10):
+            return np.log1p(abs(reward)) / np.log(base + 1e-6) * np.sign(reward)
         
-    #     # Initialize the rewards
-    #     global_reward = 0
-    #     rewards = {agent_id: 0 for agent_id in self.agents}
+        # Initialize the rewards
+        global_reward = 0
+        rewards = {agent_id: 0 for agent_id in self.agents}
         
-    #     current_price = self.price_env.get_current_price(self.timestamp)  # Get the current electricity price
-    #     total_action_impact = sum(P_tk_dict.values())  # Get the total action impact
-    #     new_load = original_load + total_action_impact  # Calculate the new building load
-    #     load_diff = self.curr_mean - new_load
-    #     penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
+        current_price = self.price_env.get_current_price(self.timestamp)  # Get the current electricity price
+        total_action_impact = sum(P_tk_dict.values())  # Get the total action impact
+        new_load = original_load + total_action_impact  # Calculate the new building load
+        load_diff = self.curr_mean - new_load
+        penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
         
-    #     # Calculate the global reward
-    #     penalty_cost = penalty * 1.5
-    #     price_cost = -current_price * new_load - penalty_cost
-    #     global_reward = log_scale_reward(price_cost) * beta + (1 - beta) * log_scale_reward(load_diff * total_action_impact) 
+        # Calculate the global reward
+        price_cost = -current_price * new_load - penalty
+        global_reward = log_scale_reward(price_cost) * beta + (1 - beta) * log_scale_reward(load_diff * total_action_impact) 
         
-    #     # Calculate the local reward for each agent
-    #     for agent_id in active_agent_ids:
-    #         P_tk = P_tk_dict[agent_id]
-    #         r_tk = -P_tk * current_price
-    #         r_soc = abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
-    #         # local_reward = alpha * r_tk - (1 - alpha) * r_soc + gamma * global_reward
-    #         local_reward = alpha * r_tk - (1 - alpha) * r_soc
-    #         rewards[agent_id] = local_reward
+        # Calculate the local reward for each agent
+        for agent_id in active_agent_ids:
+            P_tk = P_tk_dict[agent_id]
+            r_tk = -P_tk * current_price
+            r_soc = abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
+            # local_reward = alpha * r_tk - (1 - alpha) * r_soc + gamma * global_reward
+            local_reward = alpha * r_tk - (1 - alpha) * r_soc
+            rewards[agent_id] = local_reward
             
-    #     return rewards, global_reward
+        return rewards, global_reward
 
     ###### v1 Load Balance and Energy Efficiency ######
     
@@ -460,41 +459,40 @@ class EVBuildingEnv(EVChargingEnv):
     
     ###### v2 Price Sensitivity Adjustment ######
     
-    def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict):
-        """Calculate the reward for each agent and the global reward"""
+    # def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict):
+    #     """Calculate the reward for each agent and the global reward"""
     
-        def log_scale_reward(reward, base=10):
-            return np.log1p(abs(reward)) / np.log(base + 1e-6) * np.sign(reward)
+    #     def log_scale_reward(reward, base=10):
+    #         return np.log1p(abs(reward)) / np.log(base + 1e-6) * np.sign(reward)
         
-        # Initialize the rewards
-        global_reward = 0
-        rewards = {agent_id: 0 for agent_id in self.agents}
+    #     # Initialize the rewards
+    #     global_reward = 0
+    #     rewards = {agent_id: 0 for agent_id in self.agents}
         
-        current_price = self.price_env.get_current_price(self.timestamp)  # Get the current electricity price
-        total_action_impact = sum(P_tk_dict.values())  # Get the total action impact
-        new_load = original_load + total_action_impact  # Calculate the new building load
-        load_diff = self.curr_mean - new_load
-        penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
+    #     current_price = self.price_env.get_current_price(self.timestamp)  # Get the current electricity price
+    #     total_action_impact = sum(P_tk_dict.values())  # Get the total action impact
+    #     new_load = original_load + total_action_impact  # Calculate the new building load
+    #     load_diff = self.curr_mean - new_load
+    #     penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
         
-        # Calculate the global reward
-        penalty_cost = penalty * 1.5
-        price_cost = -current_price * new_load - penalty_cost
-        global_reward = log_scale_reward(price_cost) * beta + (1 - beta) * log_scale_reward(load_diff * total_action_impact)
+    #     # Calculate the global reward
+    #     price_cost = -current_price * new_load - penalty
+    #     global_reward = log_scale_reward(price_cost) * beta + (1 - beta) * log_scale_reward(load_diff * total_action_impact)
         
-        # Define price sensitivity factor (higher factor for high price periods)
-        price_sensitivity_factor = 1 + (current_price / self.price_env.max_price())  # Scale with current price
+    #     # Define price sensitivity factor (higher factor for high price periods)
+    #     price_sensitivity_factor = 1 + (current_price / self.price_env.max_price())  # Scale with current price
 
-        # Calculate the local reward for each agent
-        for agent_id in active_agent_ids:
-            P_tk = P_tk_dict[agent_id]
-            r_tk = -P_tk * current_price * price_sensitivity_factor  # Increase penalty during peak prices
-            r_soc = abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
+    #     # Calculate the local reward for each agent
+    #     for agent_id in active_agent_ids:
+    #         P_tk = P_tk_dict[agent_id]
+    #         r_tk = -P_tk * current_price * price_sensitivity_factor  # Increase penalty during peak prices
+    #         r_soc = abs(self.ev_data[agent_id]['soc'] - self.get_ev_reasonable_soc(agent_id, self.timestamp))
             
-            # Combine the terms for the local reward
-            local_reward = alpha * r_tk - (1 - alpha) * r_soc
-            rewards[agent_id] = local_reward
+    #         # Combine the terms for the local reward
+    #         local_reward = alpha * r_tk - (1 - alpha) * r_soc
+    #         rewards[agent_id] = local_reward
         
-        return rewards, global_reward
+    #     return rewards, global_reward
     
     ###### v3 SoC Prediction and Time-Weighted Penalty ######
     
