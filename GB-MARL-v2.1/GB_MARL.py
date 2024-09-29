@@ -268,10 +268,10 @@ class GB_MARL:
         time_remaining = (t_d - current_hour_agent_id).clamp(min=0)
 
         # Calculate the LCB term
-        rho = 1
-        
+        PARAM = 10
         sqrt_term = clamp_and_check_nan(torch.sqrt(SoC_diff * (time_remaining / time_diff)), epsilon, actions.device)
-        lcb = actions_critics_values - actions_critics_values * torch.abs(torch.log2(safe_actions)) * sqrt_term
+        # lcb = actions_critics_values - actions_critics_values * torch.abs(torch.log2(safe_actions)) * sqrt_term
+        lcb = actions_critics_values - PARAM * actions_critics_values*(torch.abs(torch.log2(safe_actions)) * sqrt_term)
 
         return lcb
 

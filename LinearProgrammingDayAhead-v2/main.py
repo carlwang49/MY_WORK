@@ -14,7 +14,7 @@ load_dotenv()
 # Contract capacity and capacity price
 contract_capacity = CONTRACT_CAPACITY = int(os.getenv('CONTRACT_CAPACITY')) 
 capacity_price = CAPACITY_PRICE = float(os.getenv('CAPACITY_PRICE'))
-weight = 1e6  # Adjusted weight for capacity constraint penalty
+weight = 5e5  # Adjusted weight for capacity constraint penalty
 
 # Dates for EV request data
 start_date = START_DATE = os.getenv('TEST_START_DATETIME', '2018-07-01')
