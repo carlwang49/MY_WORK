@@ -245,6 +245,35 @@ class GB_MARL:
         lcb = actions_critics_values - actions_critics_values * torch.abs(torch.log2(safe_actions)) * sqrt_term
 
         return lcb
+    
+    
+    def LCB(self, actions_critics_values, actions, obs_agent_id, current_hour_agent_id, epsilon=1e-8):
+        """Calculate the LCB"""
+
+        def clamp_and_check_nan(tensor, min_val, device):
+            """Clamps the tensor to avoid invalid values and checks for NaN."""
+            tensor = tensor.clamp(min=min_val)
+            return torch.where(torch.isnan(tensor), torch.tensor(0.0, device=device), tensor)
+        
+        actions = actions.squeeze(1)
+        SoC_d, SoC_t = obs_agent_id[:, 1], obs_agent_id[:, 0]
+        t_d, t_a = obs_agent_id[:, 2], obs_agent_id[:, 3]
+
+        # Add epsilon to avoid log(0) and division by zero issues
+        safe_actions = actions + epsilon
+
+        # Clamp and check for NaN
+        SoC_diff = clamp_and_check_nan(SoC_d - SoC_t, epsilon, actions.device)
+        time_diff = clamp_and_check_nan(t_d - t_a, epsilon, actions.device)
+        time_remaining = (t_d - current_hour_agent_id).clamp(min=0)
+
+        # Calculate the LCB term
+        rho = 1
+        
+        sqrt_term = clamp_and_check_nan(torch.sqrt(SoC_diff * (time_remaining / time_diff)), epsilon, actions.device)
+        lcb = actions_critics_values - actions_critics_values * torch.abs(torch.log2(safe_actions)) * sqrt_term
+
+        return lcb
 
         
     def update_target(self, tau):
