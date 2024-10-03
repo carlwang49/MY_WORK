@@ -20,8 +20,8 @@ class GB_MARL:
         
         # Top level agent
         top_level_obs_dim, top_level_act_dim = top_dim_info[0], top_dim_info[1] # observation and action dimension of the top level agent
-        self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr) # initialize the top level agent
-        self.top_level_buffer = TopBuffer(top_level_buffer_capacity, top_level_obs_dim, top_level_act_dim, 'cuda') # initialize the top level buffer
+        # self.top_level_agent = TopAgent(top_level_obs_dim, top_level_act_dim, actor_lr, critic_lr) # initialize the top level agent
+        # self.top_level_buffer = TopBuffer(top_level_buffer_capacity, top_level_obs_dim, top_level_act_dim, 'cuda') # initialize the top level buffer
         
         # create Agent(actor-critic) and replay buffer for each agent
         self.agents = {}
@@ -39,7 +39,7 @@ class GB_MARL:
         # self.logger = setup_logger(os.path.join(res_dir, 'GB_MARL.log')) # initialize the logger
 
 
-    def add(self, obs, global_observation, action, top_level_action, reward, global_reward, 
+    def add(self, obs, global_observation, action, reward, global_reward, 
             next_obs, next_global_observation, current_hour, done):
         """Add the transition to the buffer"""
         
@@ -52,16 +52,16 @@ class GB_MARL:
             d = done[agent_id]
             self.buffers[agent_id].add(o, a, r, current_hour, next_o, d) # add experience to the buffer of each agent
         
-        top_level_obs = global_observation 
-        top_level_next_obs = next_global_observation
-        top_level_reward = global_reward
-        top_level_done = any(done.values())
+        # top_level_obs = global_observation 
+        # top_level_next_obs = next_global_observation
+        # top_level_reward = global_reward
+        # top_level_done = any(done.values())
         
         # add the transition to the top level buffer
-        self.top_level_buffer.add(top_level_obs, top_level_action, top_level_reward, top_level_next_obs, top_level_done)
+        # self.top_level_buffer.add(top_level_obs, top_level_reward, top_level_next_obs, top_level_done)
 
 
-    def sample(self, batch_size, agents_status, top_level_next_action):
+    def sample(self, batch_size, agents_status):
         """Sample transitions from the buffer"""
         # get the total num of transitions, these buffers should have same number of transitions
         total_num = len(self.buffers['agent_0'])
@@ -79,24 +79,24 @@ class GB_MARL:
             next_obs[agent_id] = n_o
             done[agent_id] = d
             # calculate next_action using target_network and next_state
-            next_act[agent_id] = self.agents[agent_id].target_action(n_o, agents_status[agent_id], top_level_next_action)
+            next_act[agent_id] = self.agents[agent_id].target_action(n_o, agents_status[agent_id])
         
         return obs, act, reward, cur_hour, next_obs, done, next_act
     
-    def top_level_sample(self, batch_size):
-        """Sample transitions from the top level buffer"""
-        top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done = self.top_level_buffer.sample(batch_size)
-        top_level_next_act = self.top_level_agent.target_action(top_level_next_obs)
-        return top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act
+    # def top_level_sample(self, batch_size):
+    #     """Sample transitions from the top level buffer"""
+    #     top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done = self.top_level_buffer.sample(batch_size)
+    #     top_level_next_act = self.top_level_agent.target_action(top_level_next_obs)
+    #     return top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act
 
 
-    def select_action(self, obs, top_level_action, agents_status):
+    def select_action(self, obs, agents_status):
         """Select action using GB_MARL"""
 
         actions = {}
         for agent, o in obs.items():
             o = torch.from_numpy(o).unsqueeze(0).float()
-            a = self.agents[agent].action(o, agents_status[agent], top_level_action)  # torch.Size([1, action_size])
+            a = self.agents[agent].action(o, agents_status[agent])  # torch.Size([1, action_size])
             # NOTE that the output is a tensor, convert it to int before input to the environment
             # actions[agent] = a.squeeze(0).argmax().item()
             actions[agent] = a.squeeze(0).item()
@@ -105,90 +105,90 @@ class GB_MARL:
         return actions
     
     
-    def select_top_level_action(self, global_observation):
-        """Select top level action using GB_MARL"""
-        top_level_obs = global_observation
-        top_level_action = self.top_level_agent.action(torch.from_numpy(top_level_obs).unsqueeze(0).float()) # select top level action
-        top_level_action = int(top_level_action.item()) # get the top level action
+    # def select_top_level_action(self, global_observation):
+    #     """Select top level action using GB_MARL"""
+    #     top_level_obs = global_observation
+    #     top_level_action = self.top_level_agent.action(torch.from_numpy(top_level_obs).unsqueeze(0).float()) # select top level action
+    #     top_level_action = int(top_level_action.item()) # get the top level action
         
-        return top_level_action
+    #     return top_level_action
     
-    def pass_high_obs_to_low_obs(self, obs, top_level_act, top_level_obs, agents):
-        """Pass observation to the agents"""
-        top_level_obs_tensor, top_level_act_tensor = torch.tensor(top_level_obs, dtype=torch.float32).to(self.device), torch.tensor(top_level_act, dtype=torch.float32).to(self.device)
-        top_level_obs_tensor, top_level_act_tensor = top_level_obs_tensor.view(-1, len(top_level_obs)), top_level_act_tensor.view(-1, 1)
-        top_level_critic_value = self.top_level_agent.critic_value(top_level_obs_tensor, top_level_act_tensor)
-        top_level_critic_scalar = top_level_critic_value.mean().item()
+    # def pass_high_obs_to_low_obs(self, obs, top_level_act, top_level_obs, agents):
+    #     """Pass observation to the agents"""
+    #     top_level_obs_tensor, top_level_act_tensor = torch.tensor(top_level_obs, dtype=torch.float32).to(self.device), torch.tensor(top_level_act, dtype=torch.float32).to(self.device)
+    #     top_level_obs_tensor, top_level_act_tensor = top_level_obs_tensor.view(-1, len(top_level_obs)), top_level_act_tensor.view(-1, 1)
+    #     top_level_critic_value = self.top_level_agent.critic_value(top_level_obs_tensor, top_level_act_tensor)
+    #     top_level_critic_scalar = top_level_critic_value.mean().item()
         
-        for agent_id in agents:
-            obs[agent_id][9] = top_level_act
-            obs[agent_id][10] = top_level_critic_scalar
+    #     for agent_id in agents:
+    #         obs[agent_id][6] = top_level_act
+    #         obs[agent_id][7] = top_level_critic_scalar
         
-        return obs
+    #     return obs
 
     
-    def pass_low_obs_to_high_obs(self, next_global_observation, obs, actions, agents):
-        """Pass low observation to the top level agent"""
-        low_obs_list, low_act_list = [], []
-        # get the observation and action of the low level agents
-        for agent_id in agents:
-            low_obs_tensor = torch.tensor(obs[agent_id], dtype=torch.float32).to(self.device).unsqueeze(0)
-            low_act_tensor = torch.tensor(actions[agent_id], dtype=torch.float32).to(self.device).unsqueeze(0)
-            low_obs_tensor = low_obs_tensor.view(1, -1)
-            low_act_tensor = low_act_tensor.view(1, -1)
-            low_obs_list.append(low_obs_tensor)
-            low_act_list.append(low_act_tensor)
+    # def pass_low_obs_to_high_obs(self, next_global_observation, obs, actions, agents):
+    #     """Pass low observation to the top level agent"""
+    #     low_obs_list, low_act_list = [], []
+    #     # get the observation and action of the low level agents
+    #     for agent_id in agents:
+    #         low_obs_tensor = torch.tensor(obs[agent_id], dtype=torch.float32).to(self.device).unsqueeze(0)
+    #         low_act_tensor = torch.tensor(actions[agent_id], dtype=torch.float32).to(self.device).unsqueeze(0)
+    #         low_obs_tensor = low_obs_tensor.view(1, -1)
+    #         low_act_tensor = low_act_tensor.view(1, -1)
+    #         low_obs_list.append(low_obs_tensor)
+    #         low_act_list.append(low_act_tensor)
         
-        # calculate the critic value of the low level agents
-        low_critic_values = self.agents[agent_id].critic_value(low_obs_list, low_act_list)
-        critic_values = [value.item() for value in low_critic_values]
+    #     # calculate the critic value of the low level agents
+    #     low_critic_values = self.agents[agent_id].critic_value(low_obs_list, low_act_list)
+    #     critic_values = [value.item() for value in low_critic_values]
         
-        # calculate the average and standard deviation of the critic values
-        avg_critic_value = np.mean(critic_values)
-        std_critic_value = np.std(critic_values)
-        next_global_observation[8] = avg_critic_value
-        next_global_observation[9] = std_critic_value
+    #     # calculate the average and standard deviation of the critic values
+    #     avg_critic_value = np.mean(critic_values)
+    #     std_critic_value = np.std(critic_values)
+    #     next_global_observation[8] = avg_critic_value
+    #     next_global_observation[9] = std_critic_value
         
-        return next_global_observation
+    #     return next_global_observation
     
     def learn(self, batch_size, top_level_batch_size, gamma, agents_status, step):
         """Learn from the replay buffer"""
         
         # top level agent
-        top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act = \
-            self.top_level_sample(top_level_batch_size) # sample transitions from the top level buffer
+        # top_level_obs, top_level_act, top_level_reward, top_level_next_obs, top_level_done, top_level_next_act = \
+        #     self.top_level_sample(top_level_batch_size) # sample transitions from the top level buffer
         
-        # update the top level critic 
-        top_level_critic_value = self.top_level_agent.critic_value(top_level_obs, top_level_act) # calculate the value of the critic network
+        # # update the top level critic 
+        # top_level_critic_value = self.top_level_agent.critic_value(top_level_obs, top_level_act) # calculate the value of the critic network
 
-        # calculate top level target critic value
-        next_top_target_critic_value = self.top_level_agent.target_critic_value(top_level_next_obs, top_level_next_act) # calculate the value of the target critic network
+        # # calculate top level target critic value
+        # next_top_target_critic_value = self.top_level_agent.target_critic_value(top_level_next_obs, top_level_next_act) # calculate the value of the target critic network
         
-        # calculate top level target value
-        top_target_value = top_level_reward + gamma * next_top_target_critic_value * (1 - top_level_done) # calculate the target value
+        # # calculate top level target value
+        # top_target_value = top_level_reward + gamma * next_top_target_critic_value * (1 - top_level_done) # calculate the target value
         
-        # calculate top level critic loss
-        top_critic_loss = F.mse_loss(top_level_critic_value, top_target_value.detach(), reduction='mean') # calculate the critic loss
-        self.top_level_agent.update_critic(top_critic_loss) # update the critic network
+        # # calculate top level critic loss
+        # top_critic_loss = F.mse_loss(top_level_critic_value, top_target_value.detach(), reduction='mean') # calculate the critic loss
+        # self.top_level_agent.update_critic(top_critic_loss) # update the critic network
         
-        # update the top level actor
-        top_action, top_logits = self.top_level_agent.action(top_level_obs, model_out=True) # select action
-        top_level_act = top_action
-        top_level_actor_loss = -self.top_level_agent.critic_value(top_level_obs, top_level_act).mean() # calculate the actor loss using advantage
-        top_level_actor_loss_pse = torch.pow(top_logits, 2).mean() # calculate the actor loss pse
-        self.top_level_agent.update_actor(top_level_actor_loss + 1e-3 * top_level_actor_loss_pse) # update the actor network
-        # self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
+        # # update the top level actor
+        # top_action, top_logits = self.top_level_agent.action(top_level_obs, model_out=True) # select action
+        # top_level_act = top_action
+        # top_level_actor_loss = -self.top_level_agent.critic_value(top_level_obs, top_level_act).mean() # calculate the actor loss using advantage
+        # top_level_actor_loss_pse = torch.pow(top_logits, 2).mean() # calculate the actor loss pse
+        # self.top_level_agent.update_actor(top_level_actor_loss + 1e-3 * top_level_actor_loss_pse) # update the actor network
+        # # self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
         
-        wandb.log({
-            "top agent critic loss:": top_critic_loss.item(),
-            "top agent actor loss": top_level_actor_loss.item()
-        }, step=step)
+        # wandb.log({
+        #     "top agent critic loss:": top_critic_loss.item(),
+        #     "top agent actor loss": top_level_actor_loss.item()
+        # }, step=step)
 
         
-        top_level_next_action = int(torch.mean(top_level_next_act).item() >= 0.5)
-        top_level_action = int(torch.mean(top_level_act).item() >= 0.5)
+        # top_level_next_action = int(torch.mean(top_level_next_act).item() >= 0.5)
+        # top_level_action = int(torch.mean(top_level_act).item() >= 0.5)
         for agent_id, agent in self.agents.items():
-            obs, act, reward, current_hour, next_obs, done, next_act = self.sample(batch_size, agents_status, top_level_next_action)
+            obs, act, reward, current_hour, next_obs, done, next_act = self.sample(batch_size, agents_status)
             
             # update critic
             critic_value = agent.critic_value(list(obs.values()), list(act.values()))
@@ -205,7 +205,7 @@ class GB_MARL:
 
             # update actor
             # action of the current agent is calculated using its actor
-            action, logits = agent.action(obs[agent_id], agents_status[agent_id], top_level_action, model_out=True)
+            action, logits = agent.action(obs[agent_id], agents_status[agent_id], model_out=True)
             act[agent_id] = action
             agent_critic_value = agent.critic_value(list(obs.values()), list(act.values()))
             lcb = self.LCB(agent_critic_value, act[agent_id], obs[agent_id], current_hour[agent_id])
@@ -278,17 +278,9 @@ class GB_MARL:
             # 將 inf 值替換為 0
             sqrt_term = torch.where(torch.isinf(sqrt_term), torch.tensor(0.0, device=sqrt_term.device), sqrt_term)
         
-        
-        # # v4.2
-        # PARAM = 10
-        # lcb = actions_critics_values - PARAM * actions_critics_values*log_term*sqrt_term
-        
-        # v4.3
-        PARAM = 10 # rho
-        lcb = actions_critics_values - PARAM*(torch.abs(torch.log2(safe_actions)) * sqrt_term)
-        
-        # PARAM = 1000 # rho
-        # lcb = actions_critics_values - PARAM*(torch.abs(torch.log2(safe_actions)) * sqrt_term)
+        PARAM = 10
+        # v4
+        lcb = actions_critics_values - PARAM * actions_critics_values*log_term*sqrt_term
         
         return lcb
     
@@ -335,16 +327,16 @@ class GB_MARL:
             soft_update(agent.actor, agent.target_actor)
             soft_update(agent.critic, agent.target_critic)
             
-        # update the target network for the top level agent
-        soft_update(self.top_level_agent.actor, self.top_level_agent.target_actor)  
-        soft_update(self.top_level_agent.critic, self.top_level_agent.target_critic)
+        # # update the target network for the top level agent
+        # soft_update(self.top_level_agent.actor, self.top_level_agent.target_actor)  
+        # soft_update(self.top_level_agent.critic, self.top_level_agent.target_critic)
 
     def save(self, reward):
         model_state = {
             'agent_actor': {name: agent.actor.state_dict() for name, agent in self.agents.items()},
             'agent_critic': {name: agent.critic.state_dict() for name, agent in self.agents.items()},
-            'top_level_agent_actor': self.top_level_agent.actor.state_dict(),
-            'top_level_agent_critic': self.top_level_agent.critic.state_dict()
+            # 'top_level_agent_actor': self.top_level_agent.actor.state_dict(),
+            # 'top_level_agent_critic': self.top_level_agent.critic.state_dict()
         }
         torch.save(model_state, os.path.join(self.res_dir, 'model.pt'))
         
@@ -365,7 +357,7 @@ class GB_MARL:
             agent.actor.load_state_dict(data['agent_actor'][agent_id])
             agent.critic.load_state_dict(data['agent_critic'][agent_id])
         
-        instance.top_level_agent.actor.load_state_dict(data['top_level_agent_actor'])
-        instance.top_level_agent.critic.load_state_dict(data['top_level_agent_critic'])
+        # instance.top_level_agent.actor.load_state_dict(data['top_level_agent_actor'])
+        # instance.top_level_agent.critic.load_state_dict(data['top_level_agent_critic'])
         
         return instance  # return the instance
