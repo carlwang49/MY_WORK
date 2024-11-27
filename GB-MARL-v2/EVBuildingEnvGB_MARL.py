@@ -24,10 +24,6 @@ class EVBuildingEnv(EVChargingEnv):
     def __init__(self, num_agents, start_time, end_time):
         super().__init__(num_agents, start_time, end_time)
         
-        # # set TOU price
-        # self.tou_price_in_weekday = [0.056] * 8 + [0.092] * 4 + [0.267] * 6 + [0.092] * 5 + [0.056] * 1
-        # self.tou_price_in_weekend = [0.056] * 24
-        
         # init the maximum and minimum SoC
         self.SoC_upper_bound_dict = {f'agent_{i}': 0 for i in range(num_agents)}
         self.Soc_lower_bound_dict = {f'agent_{i}': 0 for i in range(num_agents)}
@@ -66,8 +62,8 @@ class EVBuildingEnv(EVChargingEnv):
         
         self.dones = {agent_id: False for agent_id in self.agents}
         self.infos = {}
-        self.inactive_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, -1e10, -1e10], dtype=np.float32)
-        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
+        self.inactive_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, -1e10, -1e10], dtype=np.float32) # len = 11
+        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32) # len = 10
         
         # # Calculate the average of the top 10% of historical peak electricity consumption
         # sorted_load_history = self.building_load['Total_Power(kWh)'].sort_values(ascending=False)
@@ -249,6 +245,11 @@ class EVBuildingEnv(EVChargingEnv):
         departure_time = self.ev_data[agent_id]['departure_time'].hour
         arrival_time = self.ev_data[agent_id]['arrival_time'].hour
 
+
+        # Get the state information including 
+        # SoC, building load, P_max_tk, P_min_tk, emergency, current_price, agent_status, top_level_action, top_level_critic_value
+        # the index of the state information is as follows:
+        # 0: SoC, 1: soc_departure, 2: departure_time, 3: arrival_time, 4: normalized_P_max_tk, 5: normalized_P_min_tk, 6: emergency, 7: current_price, 8: agent_status, 9: top_level_action, 10: top_level_critic_value
         state = [soc, soc_departure, departure_time, arrival_time, 
                  normalized_P_max_tk, normalized_P_min_tk, emergency, current_price, 
                  agent_status, top_level_action, top_level_critic_value]
@@ -284,6 +285,10 @@ class EVBuildingEnv(EVChargingEnv):
         # Get low level standard deviation of critic value
         low_level_std_critic_value = 0
         
+        # Get the state information including
+        # current_parking_number, total_ev_energy, current_price, normalized_load_diff, past_avg_load, future_avg_load, past_avg_price, future_avg_price, low_level_avg_critic_value, low_level_std_critic_value
+        # the index of the state information is as follows:
+        # 0: current_parking_number, 1: total_ev_energy, 2: current_price, 3: normalized_load_diff, 4: past_avg_load, 5: future_avg_load, 6: past_avg_price, 7: future_avg_price, 8: low_level_avg_critic_value, 9: low_level_std_critic_value
         state = [current_parking_number, total_ev_energy, current_price, normalized_load_diff, 
                  past_avg_load, future_avg_load, past_avg_price, future_avg_price, low_level_avg_critic_value, low_level_std_critic_value]
         

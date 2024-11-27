@@ -114,15 +114,22 @@ class GB_MARL:
         return top_level_action
     
     def pass_high_obs_to_low_obs(self, obs, top_level_act, top_level_obs, agents):
-        """Pass observation to the agents"""
+        """
+        Pass observation to the agents
+
+        - obs: dict, key is agent_id, value is the observation of the agent
+        - top_level_act: int, top level action
+        - top_level_obs: list, top level observation
+        - agents: list, list of agent_id
+        """
         top_level_obs_tensor, top_level_act_tensor = torch.tensor(top_level_obs, dtype=torch.float32).to(self.device), torch.tensor(top_level_act, dtype=torch.float32).to(self.device)
         top_level_obs_tensor, top_level_act_tensor = top_level_obs_tensor.view(-1, len(top_level_obs)), top_level_act_tensor.view(-1, 1)
         top_level_critic_value = self.top_level_agent.critic_value(top_level_obs_tensor, top_level_act_tensor)
         top_level_critic_scalar = top_level_critic_value.mean().item()
         
         for agent_id in agents:
-            obs[agent_id][6] = top_level_act
-            obs[agent_id][7] = top_level_critic_scalar
+            obs[agent_id][8] = top_level_act
+            obs[agent_id][9] = top_level_critic_scalar
         
         return obs
 
@@ -179,10 +186,10 @@ class GB_MARL:
         self.top_level_agent.update_actor(top_level_actor_loss + 1e-3 * top_level_actor_loss_pse) # update the actor network
         # self.logger.info(f'Top Level Agent: critic loss: {top_critic_loss.item()}, actor loss: {top_level_actor_loss.item()}') 
         
-        wandb.log({
-            "top agent critic loss:": top_critic_loss.item(),
-            "top agent actor loss": top_level_actor_loss.item()
-        }, step=step)
+        # wandb.log({
+        #     "top agent critic loss:": top_critic_loss.item(),
+        #     "top agent actor loss": top_level_actor_loss.item()
+        # }, step=step)
 
         
         top_level_next_action = int(torch.mean(top_level_next_act).item() >= 0.5)
@@ -214,10 +221,10 @@ class GB_MARL:
             agent.update_actor(actor_loss + 1e-3 * actor_loss_pse) # update actor
             # self.logger.info(f'{agent_id}: critic loss: {critic_loss.item()}, actor loss: {actor_loss.item()}')
             
-            wandb.log({
-                "low agent critic loss:": critic_loss.item(),
-                "low agent actor loss": actor_loss.item()
-            }, step=step)
+            # wandb.log({
+            #     "low agent critic loss:": critic_loss.item(),
+            #     "low agent actor loss": actor_loss.item()
+            # }, step=step)
         
     def LCB(self, actions_critics_values, actions, obs_agent_id, current_hour_agent_id, epsilon=1e-8):
         """Calculate the LCB"""

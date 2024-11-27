@@ -63,9 +63,9 @@ if __name__ == '__main__':
     default_config['test_end_date'] = test_end_date
     default_config['num_agents'] = num_agents
 
-    wandb.init(project=DIR_NAME, config=default_config)
-    wandb.run.name = DIR_NAME
-    wandb.run.save()
+    # wandb.init(project=DIR_NAME, config=default_config)
+    # wandb.run.name = DIR_NAME
+    # wandb.run.save()
     
     # Define the start and end date of the EV request data
     ev_request_dict = prepare_ev_request_data(parking_data_path, start_date, end_date)
@@ -108,7 +108,7 @@ if __name__ == '__main__':
 
         curr_global_reward = 0  # global reward of the current episode
         
-        while env.timestamp <= env.end_time:  
+        while env.timestamp <= env.end_time:  # loop until the end time from the start time
             
             # skip the time
             if env.timestamp.hour < 7 or env.timestamp.hour > 23:
@@ -141,7 +141,7 @@ if __name__ == '__main__':
             if step < args.random_steps:
                 actions = {}
                 top_level_action = env.get_top_level_action_space().sample() # sample top level actions
-                obs = gb_marl.pass_high_obs_to_low_obs(obs, top_level_action, global_observation, env.agents)
+                obs = gb_marl.pass_high_obs_to_low_obs(obs, top_level_action, global_observation, env.agents) # pass high-level observation to low-level observation
                 # print(f'top_level_action: {top_level_action}')
                 for agent_id in env.agents:
                     if env.agents_status[agent_id]:
@@ -206,13 +206,13 @@ if __name__ == '__main__':
             
             logger.bind(console=True).info(message)
             logger.bind(console=True).info(f'global reward: {curr_global_reward}')
-            wandb.log(
-                {
-                    "episode": episode + 1,
-                    "sum_reward": sum_reward,
-                    "global_reward": curr_global_reward
-                }, step=step
-            )
+            # wandb.log(
+            #     {
+            #         "episode": episode + 1,
+            #         "sum_reward": sum_reward,
+            #         "global_reward": curr_global_reward
+            #     }, step=step
+            # )
 
     gb_marl.save(episode_rewards)  # save model
     plot_training_results(episode_rewards, args, result_dir)
