@@ -78,7 +78,7 @@ if __name__ == '__main__':
     # create a new folder to save the result
     result_dir = create_result_dir(f'{DIR_NAME}_alpha{alpha}_beta{beta}_num{NUM_AGENTS}_s{PARKING_VERSION}') 
     
-    # create MADDPG agent
+    # create agent
     gb_marl = GB_MARL(dim_info, top_dim_info, args.buffer_capacity, args.batch_size, 
                     args.top_level_buffer_capacity, args.top_level_batch_size, 
                     args.actor_lr, args.critic_lr, result_dir) 
