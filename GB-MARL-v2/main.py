@@ -16,19 +16,15 @@ load_dotenv()
 alpha = ALPHA = float(os.getenv('REWARD_ALPHA'))
 beta = BETA = float(os.getenv('REWARD_BETA'))
 
-# Define the start and end date of the EV request data
+# Define the start and end date of the EV training data˝
 start_date = START_DATE = os.getenv('START_DATETIME', '2018-07-01')
 end_date = END_DATE = os.getenv('END_DATETIME', '2018-10-01')
 
-# Define the start and end date of the EV request data without year
-start_date_without_year = START_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
-end_date_without_year = END_DATE[5:]  # Assuming the format is 'YYYY-MM-DD'
-
-# Define the start and end datetime of the EV request data
+# Define the start and end datetime of the EV training data
 start_time = START_TIME = datetime.strptime(start_date, '%Y-%m-%d')
 end_time = END_TIME = datetime.strptime(end_date, '%Y-%m-%d')
 
-# Test data
+# Testing data
 test_start_date = TEST_START_DATE = os.getenv('TEST_START_DATETIME', '2018-10-01')
 test_end_date = TEST_END_DATE = os.getenv('TEST_END_DATETIME', '2018-10-08')
 test_start_time = TEST_START_TIME = datetime.strptime(test_start_date, '%Y-%m-%d')
@@ -84,7 +80,6 @@ if __name__ == '__main__':
                     args.actor_lr, args.critic_lr, result_dir) 
 
     step = 0  # global step counter
-    agent_num = env.num_agents # number of agents
     
     # reward of each episode of each agent
     episode_rewards = {
@@ -136,12 +131,19 @@ if __name__ == '__main__':
                         env.remove_ev(agent_id, ev_departure_time, env.timestamp)
                         env.current_parking_number -= 1 # decrease the number of EVs in the environment
             
+            ###############################################
+            ###############################################
             # select actions
             step += 1
             if step < args.random_steps:
                 actions = {}
-                top_level_action = env.get_top_level_action_space().sample() # sample top level actions
-                obs = gb_marl.pass_high_obs_to_low_obs(obs, top_level_action, global_observation, env.agents) # pass high-level observation to low-level observation
+                top_level_action = \
+                    env.get_top_level_action_space().sample() # sample top level actions [0, 1]
+                
+                obs = gb_marl.pass_high_obs_to_low_obs(
+                    obs, top_level_action, global_observation, env.agents
+                ) # pass high-level observation to low-level observation
+                
                 # print(f'top_level_action: {top_level_action}')
                 for agent_id in env.agents:
                     if env.agents_status[agent_id]:
@@ -154,16 +156,18 @@ if __name__ == '__main__':
                             # print(f'discharging actions: {actions[agent_id]}')
                     else:
                         # if the agent is not connected
-                        actions[agent_id] = -1e10 # set the actions to -1
+                        actions[agent_id] = -1e10 # set the actions to -1e10
             else:
                 top_level_action = gb_marl.select_top_level_action(global_observation)
                 obs = gb_marl.pass_high_obs_to_low_obs(obs, top_level_action, global_observation, env.agents)
                 actions = gb_marl.select_action(obs, top_level_action, env.agents_status) 
-            
+            ###############################################
+            ###############################################
+
             # NOTE next_global_observation 是用 Q network 算出這個時間點的十個 actions 的平均值和十個 actions 的標準差
             # NOTE next_obs 直接用這個時間點的 global actions 和 critic value
-            next_obs, next_global_observation, reward, global_reward, done, info = env.step(actions, env.timestamp)
-            next_global_observation = gb_marl.pass_low_obs_to_high_obs(next_global_observation, obs, actions, env.agents)
+            next_obs, next_global_observation, reward, global_reward, done, info = env.step(actions, env.timestamp) # take actions
+            next_global_observation = gb_marl.pass_low_obs_to_high_obs(next_global_observation, obs, actions, env.agents) # pass low-level observation to high-level observation
 
             # add experience to replay buffer
             gb_marl.add(obs, global_observation, actions, top_level_action, reward, 
@@ -176,19 +180,22 @@ if __name__ == '__main__':
             # update global reward
             curr_global_reward += global_reward
             
+            ###############################################
             # learn from the replay buffer
             if step >= args.random_steps and step % args.learn_interval == 0:  # learn every few steps
                 gb_marl.learn(args.batch_size, args.top_level_batch_size, args.gamma, env.agents_status, step) # learn from the replay buffer
                 gb_marl.update_target(args.tau) # update target network
-                
+            
             # update observation
             # NOTE 用更新過的 Q network 算出這個時間點的十個 actions 的平均值和十個 actions 的標準差取代原本的。
             global_observation = next_global_observation 
             obs = next_obs
+            ###############################################
 
             # if the current time is greater than or equal to the end time, break
             if env.timestamp >= env.end_time: 
                 break
+            ###############################################
 
         # episode finishes
         for agent_id, r in agent_reward.items():  # record reward

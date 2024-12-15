@@ -11,37 +11,36 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv'
-Price_file_path = PRICE_FILE_PATH = '../Dataset/RTP/electricity_prices_from_201807010000_to_201812312359.csv'
-alpha = ALPHA = float(os.getenv('REWARD_ALPHA'))
-beta = BETA = float(os.getenv('REWARD_BETA'))
-gamma = GAMMA = float(os.getenv('REWARD_GAMMA'))
-max_load = MAX_LOAD = int(os.getenv('MAX_LOAD'))
-min_load = MIN_LOAD = int(os.getenv('MIN_LOAD'))
-contract_capacity = CONTRACT_CAPACITY = int(os.getenv('CONTRACT_CAPACITY')) 
+# Load the environment variables
+building_load_file = BUILDING_LOAD_FILE = '../Dataset/BuildingEnergyLoad/BuildingConsumptionLoad.csv' # Building load data
+Price_file_path = PRICE_FILE_PATH = '../Dataset/RTP/electricity_prices_from_201807010000_to_201812312359.csv' # Electricity price data
+alpha = ALPHA = float(os.getenv('REWARD_ALPHA')) # Local Reward coefficient
+beta = BETA = float(os.getenv('REWARD_BETA')) # Global Reward coefficient
+max_load = MAX_LOAD = int(os.getenv('MAX_LOAD')) # Maximum load (kW)
+min_load = MIN_LOAD = int(os.getenv('MIN_LOAD')) # Minimum load (kW)
+contract_capacity = CONTRACT_CAPACITY = int(os.getenv('CONTRACT_CAPACITY')) # Contract capacity (kW)
 
-class EVBuildingEnv(EVChargingEnv):
-    def __init__(self, num_agents, start_time, end_time):
+class EVBuildingEnv(EVChargingEnv): 
+    def __init__(self, num_agents, start_time, end_time): # num_agents, start_time, end_time
         super().__init__(num_agents, start_time, end_time)
         
         # init the maximum and minimum SoC
-        self.SoC_upper_bound_dict = {f'agent_{i}': 0 for i in range(num_agents)}
-        self.Soc_lower_bound_dict = {f'agent_{i}': 0 for i in range(num_agents)}
+        self.SoC_upper_bound_dict = {f'agent_{i}': 0 for i in range(num_agents)} # Upper bound for each agent
+        self.Soc_lower_bound_dict = {f'agent_{i}': 0 for i in range(num_agents)} # Lower bound for each agent
         
         # Initialize PriceEnvironment
         self.price_env = PriceEnvironment(Price_file_path, start_time, end_time)
         
         # set contract capacity
-        self.contract_capacity = contract_capacity  
+        self.contract_capacity = contract_capacity # Contract capacity (kW)
 
         # Initialize building load
-        self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
-        self.building_load = self.set_building_time_range(start_time, end_time)
-        self.load_dict = self.building_load.set_index('Date')['Total_Power(kWh)'].to_dict()
-        self.date_list = [pd.Timestamp(date).to_pydatetime() for date in self.building_load['Date'].values]
-        self.original_load = self.get_current_load(start_time)
-        self.daily_stats = {}
-        self.precompute_daily_stats()
+        self.building_load = pd.read_csv(building_load_file, parse_dates=['Date']) # Read the building load data
+        self.building_load = self.set_building_time_range(start_time, end_time) # Set the building load time range
+        self.load_dict = self.building_load.set_index('Date')['Total_Power(kWh)'].to_dict() # Convert the building load to a dictionary by date
+        self.date_list = [pd.Timestamp(date).to_pydatetime() for date in self.building_load['Date'].values] # Get the date list, for example, [2018-07-01 00:00:00, 2018-07-01 01:00:00, ...]
+        self.daily_stats = {} # Initialize a dictionary to store daily statistics
+        self.precompute_daily_stats() # Precompute daily statistics
  
         # Initialize the agents and their status
         self.agents = [f'agent_{i}' for i in range(num_agents)]
@@ -59,20 +58,30 @@ class EVBuildingEnv(EVChargingEnv):
         
         # Initialize top level action space
         self.top_level_action_space = TopLevelActionSpace([0, 1])
-        
+
+        # Initialize the dones, infos, and observations
         self.dones = {agent_id: False for agent_id in self.agents}
         self.infos = {}
-        self.inactive_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, -1e10, -1e10], dtype=np.float32) # len = 11
-        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32) # len = 10
         
-        # # Calculate the average of the top 10% of historical peak electricity consumption
-        # sorted_load_history = self.building_load['Total_Power(kWh)'].sort_values(ascending=False)
-        # top_10_percent_index = int(len(sorted_load_history) * 0.25) # top 25% of historical peak electricity consumption
-        # top_10_percent_loads = sorted_load_history[:top_10_percent_index].copy()
-        # self.average_top_10_percent = np.mean(top_10_percent_loads) # Calculate the average of the top 10% of historical peak electricity consumption
+        # local observations: 
+        # SoC, soc_departure, departure_time, arrival_time, normalized_P_max_tk, 
+        # normalized_P_min_tk, emergency, current_price, agent_status, 
+        # top_level_action, top_level_critic_value
+        self.inactive_observation = \
+            np.array([0, 0, 0, 0, 0, 0, 
+                      0, 0, 0, -1e10, -1e10], dtype=np.float32) # len = 11
+        
+        # global observations:
+        # current_parking_number, total_ev_energy, current_price, normalized_load_diff,
+        # past_avg_load, future_avg_load, past_avg_price, future_avg_price,
+        # low_level_avg_critic_value, low_level_std_critic_value
+        self.inactive_top_observation = \
+            np.array([0, 0, 0, 0, 0, 
+                      0, 0, 0, -1e10, -1e10], dtype=np.float32) # len = 10
 
         # Calculate the maximum building load and the average building load
-        self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_past_same_date_peak_and_valley_load(self.timestamp)
+        self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = \
+            self.get_past_same_date_peak_and_valley_load(self.timestamp)
         self.min_load_diff = self.curr_valley_load - self.curr_mean
         self.max_load_diff = self.curr_peak_load - self.curr_mean
 
@@ -144,11 +153,24 @@ class EVBuildingEnv(EVChargingEnv):
     
     """get the constraints for each agent in the environment"""
     def calculate_load_and_price_trends(self, current_time, window_size=3):
+        """
+        Calculate the load and price trends for the current time
+        Args:
+        - current_time: the current time
+        - window_size: the size of the window
+        Return:
+        - past_avg_load: the average load in the past
+        - future_avg_load: the average load in the future
+        - past_avg_price: the average price in the past
+        - future_avg_price: the average price in the future
+        """
         past_loads = []
         future_loads = []
         past_prices = []
         future_prices = []
-        past_same_weekday = current_time - timedelta(days=7) # Get the same day of the previous week
+        
+        # Get the same day of the previous week
+        past_same_weekday = current_time - timedelta(days=7)
         
         for i in range(1, window_size + 1):
             past_time = current_time - timedelta(hours=i)
@@ -187,6 +209,15 @@ class EVBuildingEnv(EVChargingEnv):
     
     """get daily statistics for the building load"""
     def precompute_daily_stats(self):
+        """
+        Precompute daily statistics for the building load
+        return: daily statistics
+        - max: maximum load
+        - min: minimum load
+        - mean: mean load 
+        - std: standard deviation of the load
+        """
+        
         self.building_load['date_only'] = self.building_load['Date'].dt.date
         self.building_load['time_only'] = self.building_load['Date'].dt.time
 
@@ -245,11 +276,9 @@ class EVBuildingEnv(EVChargingEnv):
         departure_time = self.ev_data[agent_id]['departure_time'].hour
         arrival_time = self.ev_data[agent_id]['arrival_time'].hour
 
-
-        # Get the state information including 
-        # SoC, building load, P_max_tk, P_min_tk, emergency, current_price, agent_status, top_level_action, top_level_critic_value
         # the index of the state information is as follows:
-        # 0: SoC, 1: soc_departure, 2: departure_time, 3: arrival_time, 4: normalized_P_max_tk, 5: normalized_P_min_tk, 6: emergency, 7: current_price, 8: agent_status, 9: top_level_action, 10: top_level_critic_value
+        # 0: SoC, 1: soc_departure, 2: departure_time, 3: arrival_time, 4: normalized_P_max_tk, 5: normalized_P_min_tk, 
+        # 6: emergency, 7: current_price, 8: agent_status, 9: top_level_action, 10: top_level_critic_value
         state = [soc, soc_departure, departure_time, arrival_time, 
                  normalized_P_max_tk, normalized_P_min_tk, emergency, current_price, 
                  agent_status, top_level_action, top_level_critic_value]
@@ -285,10 +314,9 @@ class EVBuildingEnv(EVChargingEnv):
         # Get low level standard deviation of critic value
         low_level_std_critic_value = 0
         
-        # Get the state information including
-        # current_parking_number, total_ev_energy, current_price, normalized_load_diff, past_avg_load, future_avg_load, past_avg_price, future_avg_price, low_level_avg_critic_value, low_level_std_critic_value
         # the index of the state information is as follows:
-        # 0: current_parking_number, 1: total_ev_energy, 2: current_price, 3: normalized_load_diff, 4: past_avg_load, 5: future_avg_load, 6: past_avg_price, 7: future_avg_price, 8: low_level_avg_critic_value, 9: low_level_std_critic_value
+        # 0: current_parking_number, 1: total_ev_energy, 2: current_price, 3: normalized_load_diff, 4: past_avg_load, 
+        # 5: future_avg_load, 6: past_avg_price, 7: future_avg_price, 8: low_level_avg_critic_value, 9: low_level_std_critic_value
         state = [current_parking_number, total_ev_energy, current_price, normalized_load_diff, 
                  past_avg_load, future_avg_load, past_avg_price, future_avg_price, low_level_avg_critic_value, low_level_std_critic_value]
         
@@ -298,91 +326,7 @@ class EVBuildingEnv(EVChargingEnv):
     """reset the environment to the initial state"""
     def reset(self):
         
-        # Reset the timestamp to the start time
-        self.timestamp = self.start_time # Reset the timestamp to the start time
-        
-        # init the maximum and minimum SoC
-        self.SoC_upper_bound_dict = {f'agent_{i}': 0 for i in range(self.num_agents)}
-        self.Soc_lower_bound_dict = {f'agent_{i}': 0 for i in range(self.num_agents)}
-        
-        # Initialize PriceEnvironment
-        self.price_env = PriceEnvironment(Price_file_path, self.start_time, self.end_time)
-        
-        # Initialize building load
-        self.building_load = pd.read_csv(building_load_file, parse_dates=['Date'])
-        self.building_load = self.set_building_time_range(self.start_time, self.end_time)
-        self.load_dict = self.building_load.set_index('Date')['Total_Power(kWh)'].to_dict()
-        self.date_list = [pd.Timestamp(date).to_pydatetime() for date in self.building_load['Date'].values]
-        self.original_load = self.get_current_load(self.start_time)
-        self.daily_stats = {}
-        self.precompute_daily_stats()
- 
-        # Initialize the observation space and action space for each agent
-        self.agents = [f'agent_{i}' for i in range(self.num_agents)]
-        self.agents_status = {f'agent_{i}': False for i in range(self.num_agents)}
-        self.current_parking = np.zeros(self.num_agents, dtype=bool)
-        self.current_parking_number = 0  # Number of currently connected charging piles
-        
-        # Initialize the observation space and action space for each agent
-        self.observation_spaces = {f'agent_{i}': np.zeros(11) for i in range(self.num_agents)} # SoC, building load, P_max_tk, P_min_tk
-        # self.action_values = np.array([-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1])
-        self.action_spaces = {f'agent_{i}': ActionSpace(0, 1, (1,)) for i in range(self.num_agents)}  
-        # self.action_spaces = {f'agent_{i}': DiscreteActionSpace(self.action_values) for i in range(self.num_agents)}  
-        self.charging_action_spaces = {f'agent_{i}': ActionSpace(0.4, 1, (1,)) for i in range(self.num_agents)}
-        self.discharging_action_spaces = {f'agent_{i}': ActionSpace(0, 0.6, (1,)) for i in range(self.num_agents)}
-        
-        # Initialize top level action space
-        self.top_level_action_space = TopLevelActionSpace([0, 1])
-
-        self.dones = {agent_id: False for agent_id in self.agents}
-        self.infos = {}
-        self.inactive_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, -1e10, -1e10], dtype=np.float32)
-        self.inactive_top_observation = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
-        
-        self.current_parking = np.zeros(self.num_agents, dtype=bool)  # Whether the charging pile is connected
-        self.current_parking_number = 0  # Number of currently connected charging piles
-        # self.SoC_upper_bound_list = [0 for _ in range(self.num_agents)]  # Upper bound of SoC
-        # self.SoC_lower_bound_list = [0 for _ in range(self.num_agents)]  # Lower bound of SoC
-        
-        # peak and valley load at current day
-        self.curr_peak_load, self.curr_valley_load, self.curr_mean, self.curr_std = self.get_past_same_date_peak_and_valley_load(self.timestamp)
-        self.min_load_diff = self.curr_valley_load - self.curr_mean
-        self.max_load_diff = self.curr_peak_load - self.curr_mean
-        
-        # Store the building load history
-        self.load_history = [] 
-        
-        # Initialize EV data for each charging pile
-        self.ev_data = {
-                f'agent_{i}': {
-                'requestID': None,
-                'arrival_time': None,
-                'departure_time': None,
-                'initial_soc': 0.0,
-                'departure_soc': 0.0,
-                'soc': 0.0,
-                'time_before_soc_max': None,
-                'time_before_soc_min': None,
-            } for i in range(self.num_agents)
-        }
-        
-        # Reset the charging records and SoC history
-        self.charging_records = pd.DataFrame(columns=['requestID', 
-                                                      'arrival_time', 
-                                                      'original_departure_time',
-                                                      'departure_time', 
-                                                      'initial_soc', 
-                                                      'departure_soc',
-                                                      'final_soc', 
-                                                      'charging_power', 
-                                                      'charging_time']) 
-        
-        # Initialize a DataFrame to store SoC history
-        self.soc_history = pd.DataFrame(columns=['requestID', 
-                                                 'current_time', 
-                                                 'soc', 
-                                                 'SoC_upper_bound', 
-                                                 'SoC_lower_bound'])
+        self.__init__(self.num_agents, self.start_time, self.end_time) # Reset the environment
         
         observations = {
             agent: self.observe(agent, self.start_time)
@@ -393,7 +337,8 @@ class EVBuildingEnv(EVChargingEnv):
         
         return observations, global_observation
     
-    
+    ##############################################################
+    ##############################################################
     def calculate_reward(self, original_load, active_agent_ids, P_tk_dict: dict):
         """Calculate the reward for each agent and the global reward"""
         
@@ -407,7 +352,7 @@ class EVBuildingEnv(EVChargingEnv):
         current_price = self.price_env.get_current_price(self.timestamp)  # Get the current electricity price
         total_action_impact = sum(P_tk_dict.values())  # Get the total action impact
         new_load = original_load + total_action_impact  # Calculate the new building load
-        load_diff = self.curr_mean - new_load
+        load_diff = original_load - self.curr_mean # Calculate the load difference
         penalty = new_load - self.contract_capacity if new_load - self.contract_capacity > 0 else 0
         
         # Calculate the global reward
@@ -423,6 +368,9 @@ class EVBuildingEnv(EVChargingEnv):
             rewards[agent_id] = local_reward
             
         return rewards, global_reward
+
+    ##############################################################
+    ##############################################################
 
     def step(self, actions, current_time: datetime, time_interval: int = 60):
         """take a step in the environment"""

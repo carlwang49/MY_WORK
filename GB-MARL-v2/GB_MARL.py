@@ -122,14 +122,24 @@ class GB_MARL:
         - top_level_obs: list, top level observation
         - agents: list, list of agent_id
         """
-        top_level_obs_tensor, top_level_act_tensor = torch.tensor(top_level_obs, dtype=torch.float32).to(self.device), torch.tensor(top_level_act, dtype=torch.float32).to(self.device)
-        top_level_obs_tensor, top_level_act_tensor = top_level_obs_tensor.view(-1, len(top_level_obs)), top_level_act_tensor.view(-1, 1)
-        top_level_critic_value = self.top_level_agent.critic_value(top_level_obs_tensor, top_level_act_tensor)
+        # convert the top level observation to tensor
+        top_level_obs_tensor, top_level_act_tensor = \
+            torch.tensor(top_level_obs, dtype=torch.float32).to(self.device), \
+                torch.tensor(top_level_act, dtype=torch.float32).to(self.device)
+        
+        # reshape the top level observation and action
+        top_level_obs_tensor, top_level_act_tensor = \
+            top_level_obs_tensor.view(-1, len(top_level_obs)), top_level_act_tensor.view(-1, 1)
+        
+        # calculate the critic value of the top level agent
+        top_level_critic_value = \
+            self.top_level_agent.critic_value(top_level_obs_tensor, top_level_act_tensor)
         top_level_critic_scalar = top_level_critic_value.mean().item()
         
+        # pass the top level observation to the low level agents
         for agent_id in agents:
-            obs[agent_id][8] = top_level_act
-            obs[agent_id][9] = top_level_critic_scalar
+            obs[agent_id][9] = top_level_act
+            obs[agent_id][10] = top_level_critic_scalar
         
         return obs
 
