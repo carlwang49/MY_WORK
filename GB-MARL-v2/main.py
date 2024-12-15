@@ -10,6 +10,7 @@ from utils import (prepare_ev_request_data, create_result_dir,
                    prepare_ev_departure_data, plot_training_results, 
                    plot_global_training_results, prepare_ev_actual_departure_data, set_seed)
 from dotenv import load_dotenv
+from output import output
 import os
 load_dotenv()
 
@@ -303,6 +304,7 @@ if __name__ == '__main__':
     test_load_history_df.to_csv(test_load_history_file, index=False)
     
     print(f'Test results and histories saved to {result_dir}')
+    output(result_dir)
     
     
     
