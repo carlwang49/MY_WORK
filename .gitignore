@@ -13,6 +13,5 @@ data_plot/
 saved_models
 .env
 wandb/
-Evaluation.ipynb
 Evaluation-old.ipynb
 Evaluation-v2.ipynb
